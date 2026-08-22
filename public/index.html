@@ -1,0 +1,1005 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>VF-0033 Audit Console</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232B6777'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#EDF2F3; --surface:#FFFFFF; --surface-2:#F5F8F9; --surface-3:#EAF0F1;
+    --ink:#16232B; --ink-muted:#5B6C77; --ink-faint:#8598A2;
+    --line:#D8E0E3; --line-strong:#C1CBCF;
+    --accent:#2B6777; --accent-strong:#1E4E5C; --accent-ink:#FFFFFF; --accent-tint:#E3EFF1;
+    --ok:#2E7D4F; --ok-tint:#E3F3E8; --ok-line:#B9DCC4;
+    --bad:#A83A2C; --bad-tint:#FBEAE7; --bad-line:#E9BEB5;
+    --warn:#93641A; --warn-tint:#FBF1DD; --warn-line:#E6CE97;
+    --shadow: 0 1px 2px rgba(20,35,43,0.06), 0 8px 24px -12px rgba(20,35,43,0.18);
+    --radius:10px; --radius-sm:6px;
+    --font-display:'Archivo','Arial Narrow',sans-serif; --font-body:'IBM Plex Sans','Segoe UI',sans-serif; --font-mono:'IBM Plex Mono','Consolas',monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#111A1F; --surface:#182228; --surface-2:#1E2A31; --surface-3:#243139;
+      --ink:#E8EFF1; --ink-muted:#96A7B0; --ink-faint:#697A83;
+      --line:#2B3941; --line-strong:#3A4A53;
+      --accent:#79BAC7; --accent-strong:#9BCDD7; --accent-ink:#0A1418; --accent-tint:#1C333A;
+      --ok:#5FC98B; --ok-tint:#173523; --ok-line:#2C5B3D;
+      --bad:#E2836F; --bad-tint:#3A1D17; --bad-line:#6B372A;
+      --warn:#E3B95C; --warn-tint:#332B12; --warn-line:#6B571F;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#111A1F; --surface:#182228; --surface-2:#1E2A31; --surface-3:#243139;
+    --ink:#E8EFF1; --ink-muted:#96A7B0; --ink-faint:#697A83;
+    --line:#2B3941; --line-strong:#3A4A53;
+    --accent:#79BAC7; --accent-strong:#9BCDD7; --accent-ink:#0A1418; --accent-tint:#1C333A;
+    --ok:#5FC98B; --ok-tint:#173523; --ok-line:#2C5B3D;
+    --bad:#E2836F; --bad-tint:#3A1D17; --bad-line:#6B372A;
+    --warn:#E3B95C; --warn-tint:#332B12; --warn-line:#6B571F;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;}
+  ::selection{background:var(--accent-tint); color:var(--ink);}
+  *:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  button{font-family:inherit; cursor:pointer;}
+  input,textarea{font-family:inherit; color:inherit;}
+  .wrap{max-width:1260px; margin:0 auto; padding:20px 20px 64px;}
+
+  header.top{position:sticky; top:0; z-index:40; background:var(--bg); padding-top:18px; padding-bottom:14px; border-bottom:1px solid var(--line);}
+  .top-row{display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap;}
+  .brand{display:flex; flex-direction:column; gap:2px;}
+  .eyebrow{font-family:var(--font-mono); font-size:11px; letter-spacing:0.09em; text-transform:uppercase; color:var(--accent); font-weight:500;}
+  h1{margin:0;}
+  .h1-input{font-family:var(--font-display); font-weight:800; font-size:26px; letter-spacing:-0.01em; color:var(--ink);}
+  .subtitle{color:var(--ink-muted); font-size:13px; margin-top:1px;}
+  .header-editable{border:none; background:transparent; padding:2px 4px; margin:-2px -4px; border-radius:4px; width:100%; display:block;}
+  html:not(.admin-mode) .header-editable{pointer-events:none;}
+  html.admin-mode .header-editable{background:var(--surface-2); border:1px dashed var(--line-strong);}
+  html.admin-mode .header-editable:focus{border-color:var(--accent); border-style:solid;}
+  .meta-fields{display:flex; gap:22px; flex-wrap:wrap; align-items:flex-end;}
+  .field{display:flex; flex-direction:column; gap:3px;}
+  .field label{font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; color:var(--ink-faint); font-weight:600;}
+  .field input{border:none; border-bottom:1.5px solid var(--line-strong); background:transparent; font-size:14px; padding:3px 2px; color:var(--ink); min-width:140px; font-family:var(--font-mono);}
+  .field input:focus{border-bottom-color:var(--accent);}
+  .top-actions{display:flex; gap:8px; margin-left:auto; align-items:center;}
+  .btn{border-radius:var(--radius-sm); border:1px solid var(--line-strong); background:var(--surface); color:var(--ink); font-size:12.5px; font-weight:600; padding:8px 13px; display:inline-flex; align-items:center; gap:6px; transition:background .15s ease,border-color .15s ease;}
+  .btn:hover{border-color:var(--accent);}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
+  .btn.primary:hover{background:var(--accent-strong); border-color:var(--accent-strong);}
+  .btn.danger-arm{background:var(--bad-tint); border-color:var(--bad-line); color:var(--bad);}
+  .btn.ghost{background:transparent;}
+
+  .summary-row{display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;}
+  .chip{display:inline-flex; align-items:baseline; gap:6px; background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:6px 13px; font-size:12.5px; color:var(--ink-muted); box-shadow:var(--shadow);}
+  .chip b{font-family:var(--font-mono); font-size:13.5px; color:var(--ink); font-weight:600;}
+  .chip.bad{border-color:var(--bad-line); background:var(--bad-tint); color:var(--bad);} .chip.bad b{color:var(--bad);}
+  .chip.ok{border-color:var(--ok-line); background:var(--ok-tint); color:var(--ok);} .chip.ok b{color:var(--ok);}
+  .chip.warn{border-color:var(--warn-line); background:var(--warn-tint); color:var(--warn);} .chip.warn b{color:var(--warn);}
+  .progress-track{flex:1 1 140px; height:6px; background:var(--surface-3); border-radius:99px; overflow:hidden; min-width:100px; border:1px solid var(--line);}
+  .progress-fill{height:100%; background:var(--accent); width:0%; transition:width .3s ease;}
+
+  /* ---- Admin ---- */
+  .admin-popover{position:relative;}
+  .admin-prompt{position:absolute; right:0; top:calc(100% + 6px); background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); box-shadow:var(--shadow); padding:10px; display:none; z-index:60; width:220px;}
+  .admin-prompt.open{display:block;}
+  .admin-prompt input{width:100%; border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:13px; margin-bottom:6px;}
+  .admin-prompt .err{color:var(--bad); font-size:11px; min-height:14px; margin-bottom:4px;}
+  html.admin-mode .btn.admin-toggle{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
+
+  .admin-panel{display:none; background:var(--surface); border:1px dashed var(--accent); border-radius:var(--radius); padding:14px 16px; margin:16px 0; box-shadow:var(--shadow);}
+  html.admin-mode .admin-panel{display:block;}
+  .admin-only{display:none;}
+  html.admin-mode .admin-only{display:inline-flex;}
+  html.admin-mode button.admin-only, html.admin-mode label.admin-only{display:inline-flex;}
+  .admin-panel h3{font-family:var(--font-display); font-size:14px; margin:0 0 10px;}
+  .admin-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:14px;}
+  .admin-grid .field input{border:1px solid var(--line); border-radius:4px; padding:6px 8px; width:100%; min-width:0;}
+  .admin-note{font-size:11.5px; color:var(--ink-muted); background:var(--accent-tint); border-radius:var(--radius-sm); padding:8px 10px; margin-top:6px;}
+
+  /* ---- Layout ---- */
+  .layout{display:grid; grid-template-columns:1fr 420px; gap:22px; align-items:start; margin-top:22px;}
+  @media (max-width:960px){.layout{grid-template-columns:1fr;}}
+
+  .section-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:16px; overflow:hidden; box-shadow:var(--shadow);}
+  .section-head{display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--surface-2); padding:11px 16px; border-bottom:1px solid var(--line);}
+  .section-head h2{font-family:var(--font-display); font-size:14px; font-weight:700; margin:0;}
+  .section-count{font-family:var(--font-mono); font-size:11px; color:var(--ink-faint); white-space:nowrap;}
+  .item-row{display:grid; grid-template-columns:34px 1fr 96px 26px; gap:10px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line);}
+  .item-row:last-child{border-bottom:none;}
+  .item-no{font-family:var(--font-mono); font-size:12px; color:var(--ink-faint); font-weight:500;}
+  .item-text-input{font-size:13.3px; color:var(--ink); line-height:1.4; border:none; background:transparent; width:100%; font-family:inherit; padding:0;}
+  html:not(.admin-mode) .item-text-input{pointer-events:none;}
+  html.admin-mode .item-text-input{background:var(--surface-2); border:1px solid var(--line); border-radius:4px; padding:4px 6px;}
+  .item-row[data-status="U"]{background:var(--bad-tint); box-shadow:inset 3px 0 0 var(--bad);}
+  .item-row[data-status="A"]{box-shadow:inset 3px 0 0 var(--ok);}
+  .item-delete{border:none; background:transparent; color:var(--ink-faint); font-size:16px; line-height:1; border-radius:4px; width:24px; height:24px;}
+  .item-delete:hover{color:var(--bad); background:var(--bad-tint);}
+  .add-item-btn{display:none; width:100%; border:none; border-top:1px dashed var(--line); background:var(--surface-2); color:var(--accent); font-size:12px; font-weight:600; padding:9px; text-align:center;}
+  html.admin-mode .add-item-btn{display:block;}
+  .add-item-form{display:flex; gap:8px; padding:10px 16px; border-top:1px solid var(--line); background:var(--surface-2);}
+  .add-item-form input{flex:1; border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:13px;}
+
+  .toggle{display:inline-flex; border:1px solid var(--line-strong); border-radius:999px; overflow:hidden; height:28px;}
+  .toggle button{border:none; background:var(--surface); color:var(--ink-muted); font-size:12px; font-weight:700; width:34px; height:100%; font-family:var(--font-mono); transition:background .15s ease,color .15s ease;}
+  .toggle button:first-child{border-right:1px solid var(--line-strong);}
+  .item-row[data-status="A"] .btn-a{background:var(--ok); color:#fff;}
+  .item-row[data-status="U"] .btn-u{background:var(--bad); color:#fff;}
+
+  /* ---- NC panel ---- */
+  .nc-panel{position:sticky; top:112px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; max-height:calc(100vh - 132px); display:flex; flex-direction:column;}
+  @media (max-width:960px){.nc-panel{position:static; max-height:none;}}
+  .nc-head{padding:14px 16px 12px; border-bottom:1px solid var(--line);}
+  .nc-head-row{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .nc-head h2{font-family:var(--font-display); font-size:15px; margin:0; font-weight:800;}
+  .nc-badge{font-family:var(--font-mono); font-size:12px; font-weight:600; color:var(--bad); background:var(--bad-tint); border:1px solid var(--bad-line); border-radius:999px; padding:2px 9px;}
+  .nc-instructions{margin-top:10px; background:var(--accent-tint); border:1px solid var(--line); border-radius:var(--radius-sm); padding:9px 10px; font-size:11.3px; color:var(--ink-muted); line-height:1.5;}
+  .nc-instructions b{color:var(--ink);}
+  .nc-body{overflow-y:auto; padding:6px 0; flex:1;}
+  .nc-empty{padding:34px 20px; text-align:center; color:var(--ink-faint); font-size:12.8px;}
+  .nc-entry{display:none; padding:12px 16px; border-bottom:1px solid var(--line);}
+  .nc-entry[data-status="U"]{display:block;}
+  .nc-entry:last-child{border-bottom:none;}
+  .nc-entry-head{display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;}
+  .nc-num{font-family:var(--font-mono); font-weight:700; font-size:12px; color:#fff; background:var(--bad); border-radius:5px; padding:2px 7px;}
+  .nc-item-ref{font-size:11px; color:var(--ink-faint);}
+  .ack-badge{font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--warn-tint); color:var(--warn); border:1px solid var(--warn-line);}
+  .ack-badge.done{background:var(--ok-tint); color:var(--ok); border-color:var(--ok-line);}
+  .nc-clear{margin-left:auto; border:none; background:transparent; color:var(--ink-faint); font-size:11px; text-decoration:underline; padding:2px 4px;}
+  .nc-clear:hover{color:var(--bad);}
+  .nc-field{margin-top:7px;}
+  .nc-field label{display:block; font-size:9.8px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-faint); font-weight:600; margin-bottom:3px;}
+  .nc-field label .hint{text-transform:none; letter-spacing:0; font-weight:400; color:var(--ink-faint);}
+  .nc-field input[type="text"]{width:100%; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface-2); padding:6px 8px; font-size:12.3px;}
+  .nc-field input[type="text"]:focus{border-color:var(--accent); background:var(--surface);}
+  .shift-toggle{display:inline-flex; border:1px solid var(--line-strong); border-radius:999px; overflow:hidden;}
+  .shift-btn{border:none; background:var(--surface); color:var(--ink-muted); font-size:11.5px; font-weight:600; padding:5px 12px; border-right:1px solid var(--line-strong);}
+  .shift-btn:last-child{border-right:none;}
+  .nc-entry[data-shift="1"] .shift-btn[data-slot="1"],
+  .nc-entry[data-shift="2"] .shift-btn[data-slot="2"],
+  .nc-entry[data-shift="3"] .shift-btn[data-slot="3"],
+  .nc-entry[data-shift="4"] .shift-btn[data-slot="4"]{background:var(--accent); color:var(--accent-ink);}
+  .notify-btn{border:1px solid var(--line-strong); background:var(--surface); border-radius:var(--radius-sm); font-size:11.5px; font-weight:600; padding:6px 11px;}
+  .notify-btn:hover{border-color:var(--accent);}
+  .notify-hint{font-size:10.5px; color:var(--ink-faint); margin-left:8px;}
+  .notify-hint.err{color:var(--bad);}
+  .email-draft{margin-top:8px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface-2); padding:9px 10px;}
+  .ed-row{display:flex; gap:6px; font-size:11.5px; margin-bottom:4px;}
+  .ed-row .ed-label{color:var(--ink-faint); font-weight:600; min-width:46px;}
+  .ed-row .ed-value{color:var(--ink); word-break:break-word;}
+  .ed-body{width:100%; min-height:110px; border:1px solid var(--line); border-radius:4px; background:var(--surface); padding:6px 8px; font-size:11.8px; margin-top:2px; resize:vertical;}
+  .ed-actions{display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;}
+  .ed-hint{font-size:10.5px; color:var(--ink-faint); margin-top:6px; line-height:1.4;}
+  a.btn.ghost{text-decoration:none; text-align:center;}
+  .photo-row{display:flex; align-items:center; gap:8px;}
+  .photo-pick{border:1px dashed var(--line-strong); border-radius:var(--radius-sm); font-size:11.5px; font-weight:600; padding:6px 11px; color:var(--ink-muted); display:inline-flex;}
+  .photo-pick:hover{border-color:var(--accent); color:var(--ink);}
+  .photo-remove{border:none; background:transparent; color:var(--bad); font-size:11px; text-decoration:underline;}
+  .nc-photo{display:block; margin-top:8px; max-width:100%; border-radius:var(--radius-sm); border:1px solid var(--line);}
+
+  .signoff-card{border-top:2px solid var(--line); padding:12px 16px; background:var(--surface-2);}
+  .signoff-card h3{font-family:var(--font-display); font-size:12.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-muted);}
+  .signoff-gate{font-size:11.5px; border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px;}
+  .signoff-gate.locked{background:var(--warn-tint); color:var(--warn); border:1px solid var(--warn-line);}
+  .signoff-gate.open{background:var(--ok-tint); color:var(--ok); border:1px solid var(--ok-line);}
+  .signoff-fields{display:flex; gap:14px; flex-wrap:wrap;}
+  .signoff-card.locked .signoff-fields{pointer-events:none; opacity:.5;}
+  .signoff-fields .field input{min-width:140px;}
+
+  .readonly-banner{position:fixed; top:0; left:0; right:0; background:var(--warn); color:#241a02; text-align:center; font-size:12.5px; font-weight:600; padding:6px; z-index:100;}
+  .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px); background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:999px; font-size:12.8px; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:80;}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  footer.page-footer{max-width:1260px; margin:26px auto 0; padding:0 20px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; color:var(--ink-faint); font-size:11px; font-family:var(--font-mono);}
+
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
+
+  @media print{
+    header.top{position:static;}
+    .top-actions, .toggle, .item-delete, .add-item-btn, .add-item-form, .admin-panel, .no-print, .toast, .readonly-banner{display:none !important;}
+    .nc-panel{position:static; max-height:none; box-shadow:none;}
+    .layout{grid-template-columns:1fr; display:block;}
+    .section-card, .nc-panel{box-shadow:none; break-inside:avoid;}
+    .nc-entry{break-inside:avoid;}
+    body{background:#fff; color:#000;}
+    .item-row[data-status="U"]{background:#fdeceb;}
+  }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="top-row">
+      <div class="brand">
+        <input type="text" class="eyebrow header-editable" id="eyebrowInput" aria-label="Eyebrow label">
+        <h1><input type="text" class="h1-input header-editable" id="titleInput" aria-label="Console title"></h1>
+        <input type="text" class="subtitle header-editable" id="subtitleInput" aria-label="Subtitle">
+      </div>
+      <div class="meta-fields">
+        <div class="field"><label for="auditor">Auditor</label><input id="auditor" type="text" placeholder="Name" autocomplete="off"></div>
+        <div class="field"><label for="auditDate">Date</label><input id="auditDate" type="text" placeholder="MM/DD/YYYY" autocomplete="off"></div>
+      </div>
+      <div class="top-actions">
+        <button class="btn" id="printBtn">Print</button>
+        <button class="btn" id="pdfBtn">Download PDF</button>
+        <div class="admin-popover">
+          <button class="btn admin-toggle" id="adminToggleBtn">Admin</button>
+          <div class="admin-prompt" id="adminPrompt">
+            <input type="password" id="passcodeAttempt" placeholder="Passcode">
+            <div class="err" id="adminErr"></div>
+            <button class="btn primary" id="adminSubmit" style="width:100%">Unlock</button>
+          </div>
+        </div>
+        <button class="btn" id="resetBtn">New Audit</button>
+      </div>
+    </div>
+    <div class="summary-row">
+      <span class="chip">Reviewed <b id="chipReviewed">0</b>/<span id="chipTotal">0</span></span>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <span class="chip ok">Acceptable <b id="chipOk">0</b></span>
+      <span class="chip bad">Unacceptable <b id="chipBad">0</b></span>
+      <span class="chip warn" id="chipPending" style="display:none">Awaiting acknowledgment <b id="chipPendingNum">0</b></span>
+      <span class="chip" id="connChip" style="display:none">Reconnecting…</span>
+    </div>
+  </header>
+
+  <div class="admin-panel" id="adminPanel">
+    <h3>Admin Settings</h3>
+    <div class="admin-grid">
+      <div class="field"><label>Next Annual Review Due</label><input type="text" id="reviewDate" placeholder="MM/DD/YYYY"></div>
+      <div class="field"><label>Form Revision Date</label><input type="text" id="revisionDate" placeholder="MM/DD/YYYY"></div>
+      <div class="field"><label>Set New Admin Passcode</label><input type="text" id="newPasscode" placeholder="Leave blank to keep current"></div>
+    </div>
+    <h3>Shift Roster</h3>
+    <div class="admin-grid">
+      <div class="field"><label>Shift 1 Name</label><input type="text" id="shiftName1"></div>
+      <div class="field"><label>Shift 1 Supervisor Email</label><input type="text" id="shiftEmail1" placeholder="name@company.com"></div>
+      <div class="field"><label>Shift 2 Name</label><input type="text" id="shiftName2"></div>
+      <div class="field"><label>Shift 2 Supervisor Email</label><input type="text" id="shiftEmail2" placeholder="name@company.com"></div>
+      <div class="field"><label>Shift 3 Name</label><input type="text" id="shiftName3"></div>
+      <div class="field"><label>Shift 3 Supervisor Email</label><input type="text" id="shiftEmail3" placeholder="name@company.com"></div>
+      <div class="field"><label>Shift 4 Name</label><input type="text" id="shiftName4"></div>
+      <div class="field"><label>Shift 4 Supervisor Email</label><input type="text" id="shiftEmail4" placeholder="name@company.com"></div>
+    </div>
+    <div class="admin-note">Add or remove checklist items with the &ldquo;+ Add item&rdquo; button at the bottom of each section, or the &times; next to a row. The eyebrow label, title, and subtitle at the top are also editable directly while Admin mode is on. This app is now hosted on its own server, so every change here is saved to a real database &mdash; no dependency on Claude's hosting.</div>
+  </div>
+
+  <div class="layout">
+    <main id="checklist"></main>
+
+    <aside class="nc-panel">
+      <div class="nc-head">
+        <div class="nc-head-row"><h2>Non-Conformance Log</h2><span class="nc-badge" id="ncCount">0 open</span></div>
+        <div class="nc-instructions"><b>Instructions:</b> Any unacceptable condition must be corrected and/or a work order written &mdash; include the Work Order Number in the action taken. Note product/raw-material disposition, amount, and hold tags (or state none applied). The Shift Supervisor must acknowledge before SQF sign-off.</div>
+      </div>
+      <div class="nc-body" id="ncBody">
+        <div class="nc-empty" id="ncEmpty">No deviations logged yet.<br>Mark an item &ldquo;U&rdquo; on the checklist to open a row here.</div>
+      </div>
+      <div class="signoff-card" id="signoffCard">
+        <h3>SQF Sign-Off</h3>
+        <div class="signoff-gate locked" id="signoffGate">All open deviations must be acknowledged by their Shift Supervisor first.</div>
+        <div class="signoff-fields">
+          <div class="field"><label for="qaInitials">QA Lead / Tech Initials</label><input id="qaInitials" type="text" placeholder="Initials"></div>
+          <div class="field"><label for="reviewedBy">Reviewed By (SQF Practitioner)</label><input id="reviewedBy" type="text" placeholder="Name"></div>
+          <div class="field"><label for="reviewedDate">Date</label><input id="reviewedDate" type="text" placeholder="MM/DD/YYYY"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    <span>VF-0033-00 GMP Audit Form &middot; Written by Michael Asante</span>
+    <span>Revise Date <span id="footerRevDate">&mdash;</span></span>
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var STATE = null;
+var adminPasscode = null;
+try{ adminPasscode = sessionStorage.getItem("adminPasscode") || null; }catch(e){}
+var saveTimers = {};
+var armedDeletes = {};
+
+function $(sel, root){ return (root||document).querySelector(sel); }
+function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
+
+function toast(msg){
+  var t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(function(){ t.classList.add("show"); });
+  setTimeout(function(){ t.classList.remove("show"); setTimeout(function(){ t.remove(); }, 250); }, 3400);
+}
+
+function setValueIfIdle(el, value){
+  if(!el) return;
+  if(document.activeElement === el) return;
+  if(el.value !== value) el.value = value == null ? "" : value;
+}
+
+function anyInputFocused(){
+  var el = document.activeElement;
+  return !!(el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA"));
+}
+
+function objWith(key, val){ var o = {}; o[key] = val; return o; }
+
+function debounceSave(key, fn){
+  if(saveTimers[key]) clearTimeout(saveTimers[key]);
+  saveTimers[key] = setTimeout(function(){ delete saveTimers[key]; fn(); }, 600);
+}
+
+async function api(path, opts){
+  opts = opts || {};
+  var headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+  if(adminPasscode) headers["X-Admin-Passcode"] = adminPasscode;
+  var res = await fetch(path, Object.assign({}, opts, { headers: headers }));
+  var data = null;
+  try{ data = await res.json(); }catch(e){}
+  if(!res.ok) throw new Error((data && data.error) || ("Request failed (" + res.status + ")"));
+  return data;
+}
+
+function copyToClipboard(text){
+  var done = function(){ toast("Copied — paste into a new email."); };
+  var fail = function(){ toast("Couldn't copy automatically — select the text and copy it manually."); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, fail);
+  } else {
+    try{
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.left = "-9999px";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+      done();
+    }catch(e){ fail(); }
+  }
+}
+
+// ---------------- Connectivity ----------------
+function showConnChip(){ var c = $("#connChip"); c.style.display = "inline-flex"; c.textContent = "Can't reach the server — retrying…"; }
+function hideConnChip(){ $("#connChip").style.display = "none"; }
+
+// ---------------- Load + poll ----------------
+async function loadState(){
+  STATE = await api("/api/state");
+  renderHeader();
+  renderChecklist();
+  renderNc();
+  renderSummary();
+  renderGate();
+  hideConnChip();
+}
+
+async function pollLoop(){
+  try{
+    var rev = await api("/api/revision");
+    hideConnChip();
+    if(STATE && rev.revision !== STATE.settings.revision && !anyInputFocused()){
+      await loadState();
+    }
+  }catch(e){
+    showConnChip();
+  }
+  setTimeout(pollLoop, 4000);
+}
+
+// ---------------- Header ----------------
+function renderHeader(){
+  var s = STATE.settings;
+  setValueIfIdle($("#eyebrowInput"), s.eyebrow);
+  setValueIfIdle($("#titleInput"), s.title);
+  setValueIfIdle($("#subtitleInput"), s.subtitle);
+  setValueIfIdle($("#auditor"), s.auditor);
+  setValueIfIdle($("#auditDate"), s.audit_date);
+  setValueIfIdle($("#qaInitials"), s.qa_initials);
+  setValueIfIdle($("#reviewedBy"), s.reviewed_by);
+  setValueIfIdle($("#reviewedDate"), s.reviewed_date);
+  setValueIfIdle($("#reviewDate"), s.review_due);
+  setValueIfIdle($("#revisionDate"), s.revision_date);
+  for(var i = 1; i <= 4; i++){
+    setValueIfIdle($("#shiftName" + i), s["shift" + i + "_name"]);
+    setValueIfIdle($("#shiftEmail" + i), s["shift" + i + "_email"]);
+  }
+  $("#footerRevDate").textContent = s.revision_date || "—";
+}
+
+function bindOpenField(elId, key){
+  $("#" + elId).addEventListener("input", function(){
+    STATE.settings[key] = this.value;
+    debounceSave("settings-" + key, function(){
+      api("/api/settings", { method: "POST", body: JSON.stringify(objWith(key, STATE.settings[key])) })
+        .catch(function(e){ toast("Couldn't save: " + e.message); });
+    });
+  });
+}
+function bindGatedField(elId, key){
+  $("#" + elId).addEventListener("input", function(){
+    STATE.settings[key] = this.value;
+    debounceSave("settings-" + key, function(){
+      api("/api/settings", { method: "POST", body: JSON.stringify(objWith(key, STATE.settings[key])) })
+        .catch(function(e){ toast(e.message); loadState(); });
+    });
+  });
+}
+function bindAdminField(elId, key, onSaved){
+  $("#" + elId).addEventListener("input", function(){
+    STATE.settings[key] = this.value;
+    if(onSaved) onSaved(this.value);
+    debounceSave("settings-" + key, function(){
+      api("/api/settings", { method: "POST", body: JSON.stringify(objWith(key, STATE.settings[key])) })
+        .catch(function(e){ toast("Couldn't save (is Admin unlocked?): " + e.message); loadState(); });
+    });
+  });
+}
+
+function refreshShiftLabelsInOpenCards(){
+  $all(".nc-entry").forEach(function(entry){
+    $all(".shift-btn", entry).forEach(function(b){
+      var slot = b.dataset.slot;
+      b.textContent = STATE.settings["shift" + slot + "_name"] || ("Shift " + slot);
+    });
+  });
+}
+
+function wireHeaderFields(){
+  bindOpenField("auditor", "auditor");
+  bindOpenField("auditDate", "audit_date");
+  bindOpenField("qaInitials", "qa_initials");
+  bindGatedField("reviewedBy", "reviewed_by");
+  bindGatedField("reviewedDate", "reviewed_date");
+  bindAdminField("eyebrowInput", "eyebrow");
+  bindAdminField("titleInput", "title");
+  bindAdminField("subtitleInput", "subtitle");
+  bindAdminField("reviewDate", "review_due");
+  bindAdminField("revisionDate", "revision_date", function(v){ $("#footerRevDate").textContent = v || "—"; });
+  for(var i = 1; i <= 4; i++){
+    (function(n){
+      bindAdminField("shiftName" + n, "shift" + n + "_name", refreshShiftLabelsInOpenCards);
+      bindAdminField("shiftEmail" + n, "shift" + n + "_email");
+    })(i);
+  }
+}
+
+// ---------------- Checklist ----------------
+function buildItemRow(item){
+  var row = document.createElement("div");
+  row.className = "item-row";
+  row.dataset.itemId = item.id;
+  row.dataset.status = item.status || "";
+
+  var numEl = document.createElement("div");
+  numEl.className = "item-no";
+  numEl.textContent = String(item.id).padStart(2, "0");
+
+  var textInput = document.createElement("input");
+  textInput.type = "text";
+  textInput.className = "item-text-input";
+  textInput.value = item.text;
+  textInput.addEventListener("input", function(){
+    item.text = textInput.value;
+    debounceSave("item-text-" + item.id, function(){
+      api("/api/items/" + item.id, { method: "PUT", body: JSON.stringify({ text: item.text }) })
+        .catch(function(e){ toast("Couldn't save item wording: " + e.message); });
+    });
+  });
+
+  var toggle = document.createElement("div");
+  toggle.className = "toggle";
+  var btnA = document.createElement("button");
+  btnA.type = "button"; btnA.className = "btn-a"; btnA.textContent = "A";
+  btnA.setAttribute("aria-label", "Acceptable, item " + item.id);
+  var btnU = document.createElement("button");
+  btnU.type = "button"; btnU.className = "btn-u"; btnU.textContent = "U";
+  btnU.setAttribute("aria-label", "Unacceptable, item " + item.id);
+  btnA.addEventListener("click", function(){ setStatus(item.id, item.status === "A" ? "" : "A"); });
+  btnU.addEventListener("click", function(){ setStatus(item.id, item.status === "U" ? "" : "U"); });
+  toggle.appendChild(btnA); toggle.appendChild(btnU);
+
+  var delBtn = document.createElement("button");
+  delBtn.type = "button"; delBtn.className = "item-delete admin-only";
+  delBtn.textContent = "×"; delBtn.title = "Delete item " + item.id;
+  delBtn.addEventListener("click", function(){ handleDeleteItem(item.id, delBtn); });
+
+  row.appendChild(numEl); row.appendChild(textInput); row.appendChild(toggle); row.appendChild(delBtn);
+  return row;
+}
+
+async function setStatus(id, newStatus){
+  try{
+    var res = await api("/api/items/" + id + "/status", { method: "POST", body: JSON.stringify({ status: newStatus }) });
+    patchItem(res.item);
+  }catch(e){ toast("Couldn't update status: " + e.message); }
+}
+
+function patchItem(updated){
+  var idx = STATE.items.findIndex(function(i){ return i.id === updated.id; });
+  // Mutate the existing item object in place (rather than replacing the array
+  // slot) so that any live closures elsewhere (e.g. the NC card's field
+  // inputs, which capture the item object by reference) keep seeing fresh
+  // values instead of silently going stale.
+  if(idx >= 0){ Object.assign(STATE.items[idx], updated); updated = STATE.items[idx]; }
+
+  var row = $('.item-row[data-item-id="' + updated.id + '"]');
+  if(row){
+    row.dataset.status = updated.status || "";
+    setValueIfIdle($(".item-text-input", row), updated.text);
+  }
+
+  var nc = $('.nc-entry[data-item-id="' + updated.id + '"]');
+  if(updated.status === "U"){
+    if(!nc){ nc = buildNcCard(updated); $("#ncBody").appendChild(nc); }
+    else { updateNcCardFields(nc, updated); }
+  } else if(nc){
+    nc.remove();
+  }
+  refreshNcEmptyState();
+  renderSummary();
+  renderGate();
+}
+
+function handleDeleteItem(id, btn){
+  if(armedDeletes[id]){
+    clearTimeout(armedDeletes[id]);
+    delete armedDeletes[id];
+    doDeleteItem(id);
+    return;
+  }
+  btn.textContent = "✓"; btn.title = "Click again to confirm delete";
+  armedDeletes[id] = setTimeout(function(){
+    delete armedDeletes[id];
+    btn.textContent = "×"; btn.title = "Delete item " + id;
+  }, 3000);
+}
+
+async function doDeleteItem(id){
+  try{
+    await api("/api/items/" + id, { method: "DELETE" });
+    STATE.items = STATE.items.filter(function(i){ return i.id !== id; });
+    var row = $('.item-row[data-item-id="' + id + '"]'); if(row) row.remove();
+    var nc = $('.nc-entry[data-item-id="' + id + '"]'); if(nc) nc.remove();
+    refreshNcEmptyState(); renderSummary(); renderGate();
+    toast("Item " + id + " deleted.");
+  }catch(e){ toast("Couldn't delete (is Admin unlocked?): " + e.message); }
+}
+
+function wireAddItemForms(){
+  $all(".section-card").forEach(function(card){
+    var btn = $(".add-item-btn", card);
+    btn.addEventListener("click", function(){
+      var existing = $(".add-item-form", card);
+      if(existing){ existing.querySelector("input").focus(); return; }
+      var form = document.createElement("div");
+      form.className = "add-item-form";
+      var input = document.createElement("input");
+      input.type = "text"; input.placeholder = "New item wording";
+      var addBtn = document.createElement("button");
+      addBtn.type = "button"; addBtn.className = "btn primary"; addBtn.textContent = "Add";
+      form.appendChild(input); form.appendChild(addBtn);
+      card.insertBefore(form, btn);
+      input.focus();
+      input.addEventListener("keydown", function(ev){ if(ev.key === "Enter") addBtn.click(); });
+      addBtn.addEventListener("click", async function(){
+        var text = input.value.trim();
+        if(!text){ input.focus(); return; }
+        var sectionTitle = $(".section-head h2", card).textContent;
+        try{
+          var res = await api("/api/items", { method: "POST", body: JSON.stringify({ section: sectionTitle, text: text }) });
+          STATE.items.push(res.item);
+          card.insertBefore(buildItemRow(res.item), form);
+          form.remove();
+          renderSummary();
+          toast("Item " + res.item.id + " added.");
+        }catch(e){ toast("Couldn't add item (is Admin unlocked?): " + e.message); }
+      });
+    });
+  });
+}
+
+function renderChecklist(){
+  var container = $("#checklist");
+  container.innerHTML = "";
+  var order = [];
+  var bySection = {};
+  STATE.items.forEach(function(item){
+    if(!bySection[item.section]){ bySection[item.section] = []; order.push(item.section); }
+    bySection[item.section].push(item);
+  });
+  order.forEach(function(sectionName){
+    var items = bySection[sectionName];
+    var card = document.createElement("div");
+    card.className = "section-card";
+    var head = document.createElement("div"); head.className = "section-head";
+    var h2 = document.createElement("h2"); h2.textContent = sectionName;
+    var count = document.createElement("span"); count.className = "section-count"; count.textContent = items.length + " items";
+    head.appendChild(h2); head.appendChild(count);
+    card.appendChild(head);
+    items.forEach(function(item){ card.appendChild(buildItemRow(item)); });
+    var addBtn = document.createElement("button");
+    addBtn.type = "button"; addBtn.className = "add-item-btn admin-only"; addBtn.textContent = "+ Add item to this section";
+    card.appendChild(addBtn);
+    container.appendChild(card);
+  });
+  wireAddItemForms();
+}
+
+// ---------------- Non-Conformance panel ----------------
+function buildEmailDraft(){
+  var draft = document.createElement("div");
+  draft.className = "email-draft";
+  draft.hidden = true;
+  draft.innerHTML =
+    '<div class="ed-row"><span class="ed-label">To</span><span class="ed-value" data-role="ed-to"></span></div>' +
+    '<div class="ed-row"><span class="ed-label">Subject</span><span class="ed-value" data-role="ed-subject"></span></div>' +
+    '<textarea class="ed-body" data-role="ed-body" readonly></textarea>' +
+    '<div class="ed-actions"><button type="button" class="btn primary" data-act="copy-email">Copy details</button></div>' +
+    '<div class="ed-hint">Copy the details above and paste them into a new email to the address shown.</div>';
+  $('[data-act="copy-email"]', draft).addEventListener("click", function(){
+    var to = $('[data-role="ed-to"]', draft).textContent;
+    var subj = $('[data-role="ed-subject"]', draft).textContent;
+    var bodyText = $('[data-role="ed-body"]', draft).value;
+    copyToClipboard("To: " + to + "\nSubject: " + subj + "\n\n" + bodyText);
+  });
+  return draft;
+}
+
+function setNotifyHint(entry, msg, isErr){
+  var hint = entry._refs.notifyHint;
+  hint.textContent = msg;
+  hint.classList.toggle("err", !!isErr);
+}
+
+function handleNotify(item, entry){
+  var slot = item.shift;
+  if(!slot){ setNotifyHint(entry, "Pick a shift above first.", true); return; }
+  var email = STATE.settings["shift" + slot + "_email"];
+  if(!email){ setNotifyHint(entry, "No supervisor email on file for that shift — add one in Admin.", true); return; }
+
+  var subject = "GMP Deviation #" + item.id + " — acknowledgment needed";
+  var body = "Deviation #" + item.id + " was logged on the VF-0033-00 GMP audit.\n\n" +
+    "Audit date: " + (STATE.settings.audit_date || "(unspecified)") + "\nAuditor: " + (STATE.settings.auditor || "(unspecified)") + "\n\n" +
+    "Description: " + (item.description || "(no description entered)") +
+    "\nCorrective action: " + (item.corrective_action || "(not yet entered)") +
+    "\nPreventive measures: " + (item.preventive_measures || "(not yet entered)") + "\n\n" +
+    "Please reply or add your initials in the Audit Console to acknowledge.";
+
+  var draft = entry._refs.draft;
+  $('[data-role="ed-to"]', draft).textContent = email;
+  $('[data-role="ed-subject"]', draft).textContent = subject;
+  $('[data-role="ed-body"]', draft).value = body;
+  draft.hidden = false;
+  setNotifyHint(entry, "Draft ready below.", false);
+}
+
+async function handlePhotoPick(id, fileInput, entry){
+  var file = fileInput.files && fileInput.files[0];
+  if(!file) return;
+  var formData = new FormData();
+  formData.append("photo", file);
+  try{
+    var headers = {};
+    if(adminPasscode) headers["X-Admin-Passcode"] = adminPasscode;
+    var res = await fetch("/api/items/" + id + "/photo", { method: "POST", body: formData, headers: headers });
+    var data = await res.json();
+    if(!res.ok) throw new Error(data.error || "Upload failed");
+    var item = STATE.items.find(function(i){ return i.id === id; });
+    item.photo_filename = data.photo_filename;
+    updateNcCardFields(entry, item);
+    toast("Photo attached.");
+  }catch(e){ toast("Couldn't upload photo: " + e.message); }
+  fileInput.value = "";
+}
+
+async function handlePhotoRemove(id, entry){
+  try{
+    await api("/api/items/" + id + "/photo", { method: "DELETE" });
+    var item = STATE.items.find(function(i){ return i.id === id; });
+    item.photo_filename = null;
+    updateNcCardFields(entry, item);
+  }catch(e){ toast("Couldn't remove photo: " + e.message); }
+}
+
+async function handlePickShift(id, slot, entry){
+  var item = STATE.items.find(function(i){ return i.id === id; });
+  var newShift = item.shift === slot ? null : slot;
+  try{
+    var res = await api("/api/items/" + id + "/nc", { method: "POST", body: JSON.stringify({ shift: newShift }) });
+    var idx = STATE.items.findIndex(function(i){ return i.id === id; });
+    // Mutate in place (see note in patchItem) so the NC card's other field
+    // closures don't go stale relative to STATE.items.
+    if(idx >= 0) Object.assign(STATE.items[idx], res.item);
+    updateNcCardFields(entry, item);
+  }catch(e){ toast("Couldn't update shift: " + e.message); }
+}
+
+async function handleClearEntry(id){
+  try{
+    var res = await api("/api/items/" + id + "/clear", { method: "POST" });
+    patchItem(res.item);
+    toast("Notes cleared for item " + id + ".");
+  }catch(e){ toast("Couldn't clear notes: " + e.message); }
+}
+
+function fieldBlock(entry, item, labelHtml, cls, placeholder, apiKey){
+  var wrap = document.createElement("div"); wrap.className = "nc-field";
+  var label = document.createElement("label"); label.innerHTML = labelHtml;
+  var input = document.createElement("input");
+  input.type = "text"; input.className = cls; input.placeholder = placeholder;
+  input.addEventListener("input", function(){
+    item[apiKey] = input.value;
+    if(apiKey === "initials"){ updateAckBadge(entry, input.value); renderGate(); }
+    debounceSave("nc-" + apiKey + "-" + item.id, function(){
+      var body = {}; body[apiKey] = item[apiKey];
+      api("/api/items/" + item.id + "/nc", { method: "POST", body: JSON.stringify(body) })
+        .catch(function(e){ toast("Couldn't save: " + e.message); });
+    });
+  });
+  wrap.appendChild(label); wrap.appendChild(input);
+  entry.appendChild(wrap);
+  return input;
+}
+
+function updateAckBadge(entry, initials){
+  var badge = entry._refs.badge;
+  if(initials && initials.trim()){ badge.textContent = "Acknowledged"; badge.classList.add("done"); }
+  else { badge.textContent = "Awaiting acknowledgment"; badge.classList.remove("done"); }
+}
+
+function buildNcCard(item){
+  var entry = document.createElement("div");
+  entry.className = "nc-entry";
+  entry.dataset.itemId = item.id;
+  entry.dataset.shift = item.shift || "";
+  entry.dataset.status = item.status || "";
+  entry._refs = {};
+
+  var head = document.createElement("div"); head.className = "nc-entry-head";
+  var num = document.createElement("span"); num.className = "nc-num"; num.textContent = "#" + item.id;
+  var ref = document.createElement("span"); ref.className = "nc-item-ref"; ref.textContent = item.section;
+  var badge = document.createElement("span"); badge.className = "ack-badge";
+  var clearBtn = document.createElement("button");
+  clearBtn.type = "button"; clearBtn.className = "nc-clear no-print"; clearBtn.textContent = "Clear notes";
+  clearBtn.addEventListener("click", function(){ handleClearEntry(item.id); });
+  head.appendChild(num); head.appendChild(ref); head.appendChild(badge); head.appendChild(clearBtn);
+  entry.appendChild(head);
+  entry._refs.badge = badge;
+
+  entry._refs.descInput = fieldBlock(entry, item, "Description / Deviation", "f-description", "What was found", "description");
+  entry._refs.corrInput = fieldBlock(entry, item, 'Corrective Action <span class="hint">(what was done at the time, incl. Work Order #)</span>', "f-corrective", "Corrective action taken", "corrective_action");
+  entry._refs.prevInput = fieldBlock(entry, item, 'Preventive Measures <span class="hint">(steps to prevent recurrence)</span>', "f-preventive", "Preventive measures", "preventive_measures");
+
+  var shiftWrap = document.createElement("div"); shiftWrap.className = "nc-field";
+  var shiftLabel = document.createElement("label"); shiftLabel.textContent = "Shift";
+  var shiftToggle = document.createElement("div"); shiftToggle.className = "shift-toggle";
+  for(var s = 1; s <= 4; s++){
+    (function(slot){
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "shift-btn"; b.dataset.slot = String(slot);
+      b.textContent = STATE.settings["shift" + slot + "_name"] || ("Shift " + slot);
+      b.addEventListener("click", function(){ handlePickShift(item.id, slot, entry); });
+      shiftToggle.appendChild(b);
+    })(s);
+  }
+  shiftWrap.appendChild(shiftLabel); shiftWrap.appendChild(shiftToggle);
+  entry.appendChild(shiftWrap);
+  entry._refs.shiftToggle = shiftToggle;
+
+  entry._refs.initialsInput = fieldBlock(entry, item, "Supervisor Acknowledgment", "f-initials", "Supervisor initials", "initials");
+
+  var notifyWrap = document.createElement("div"); notifyWrap.className = "nc-field no-print";
+  var notifyBtn = document.createElement("button");
+  notifyBtn.type = "button"; notifyBtn.className = "notify-btn"; notifyBtn.textContent = "Email Shift Supervisor";
+  var notifyHint = document.createElement("span"); notifyHint.className = "notify-hint";
+  notifyBtn.addEventListener("click", function(){ handleNotify(item, entry); });
+  var draft = buildEmailDraft();
+  notifyWrap.appendChild(notifyBtn); notifyWrap.appendChild(notifyHint); notifyWrap.appendChild(draft);
+  entry.appendChild(notifyWrap);
+  entry._refs.notifyHint = notifyHint;
+  entry._refs.draft = draft;
+
+  var photoWrap = document.createElement("div"); photoWrap.className = "nc-field";
+  var photoLabel = document.createElement("label"); photoLabel.textContent = "Photo of Location";
+  var photoRow = document.createElement("div"); photoRow.className = "photo-row";
+  var pickLabel = document.createElement("label"); pickLabel.className = "photo-pick no-print"; pickLabel.textContent = "Attach photo";
+  var fileInput = document.createElement("input");
+  fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.hidden = true;
+  fileInput.addEventListener("change", function(){ handlePhotoPick(item.id, fileInput, entry); });
+  pickLabel.appendChild(fileInput);
+  var removeBtn = document.createElement("button");
+  removeBtn.type = "button"; removeBtn.className = "photo-remove no-print"; removeBtn.textContent = "Remove"; removeBtn.hidden = true;
+  removeBtn.addEventListener("click", function(){ handlePhotoRemove(item.id, entry); });
+  photoRow.appendChild(pickLabel); photoRow.appendChild(removeBtn);
+  var img = document.createElement("img"); img.className = "nc-photo"; img.alt = "Deviation location photo"; img.hidden = true;
+  photoWrap.appendChild(photoLabel); photoWrap.appendChild(photoRow); photoWrap.appendChild(img);
+  entry.appendChild(photoWrap);
+  entry._refs.img = img;
+  entry._refs.removeBtn = removeBtn;
+
+  updateNcCardFields(entry, item);
+  return entry;
+}
+
+function updateNcCardFields(entry, item){
+  var r = entry._refs;
+  setValueIfIdle(r.descInput, item.description);
+  setValueIfIdle(r.corrInput, item.corrective_action);
+  setValueIfIdle(r.prevInput, item.preventive_measures);
+  setValueIfIdle(r.initialsInput, item.initials);
+  entry.dataset.shift = item.shift || "";
+  entry.dataset.status = item.status || "";
+  if(item.photo_filename){
+    r.img.src = "/uploads/" + item.photo_filename;
+    r.img.hidden = false;
+    r.removeBtn.hidden = false;
+  } else {
+    r.img.hidden = true;
+    r.removeBtn.hidden = true;
+  }
+  updateAckBadge(entry, item.initials);
+}
+
+function refreshNcEmptyState(){
+  var hasAny = $all(".nc-entry", $("#ncBody")).length > 0;
+  $("#ncEmpty").style.display = hasAny ? "none" : "block";
+}
+
+function renderNc(){
+  var body = $("#ncBody");
+  $all(".nc-entry", body).forEach(function(e){ e.remove(); });
+  STATE.items.filter(function(i){ return i.status === "U"; }).forEach(function(item){
+    body.appendChild(buildNcCard(item));
+  });
+  refreshNcEmptyState();
+}
+
+// ---------------- Summary + gate ----------------
+function renderSummary(){
+  var total = STATE.items.length;
+  var reviewed = 0, ok = 0, bad = 0;
+  STATE.items.forEach(function(i){
+    if(i.status === "A"){ reviewed++; ok++; }
+    if(i.status === "U"){ reviewed++; bad++; }
+  });
+  $("#chipReviewed").textContent = reviewed;
+  $("#chipTotal").textContent = total;
+  $("#chipOk").textContent = ok;
+  $("#chipBad").textContent = bad;
+  $("#progressFill").style.width = (total ? Math.round((reviewed / total) * 100) : 0) + "%";
+  $("#ncCount").textContent = bad + " open";
+}
+
+function renderGate(){
+  var openItems = STATE.items.filter(function(i){ return i.status === "U"; });
+  var pending = openItems.filter(function(i){ return !i.initials || !i.initials.trim(); }).map(function(i){ return i.id; });
+  var card = $("#signoffCard"), gate = $("#signoffGate");
+  var pendingChip = $("#chipPending"), pendingNum = $("#chipPendingNum");
+  if(pending.length === 0){
+    card.classList.remove("locked"); gate.classList.remove("locked"); gate.classList.add("open");
+    gate.textContent = openItems.length === 0
+      ? "No open deviations. Ready for SQF sign-off."
+      : "All open deviations acknowledged. Ready for SQF sign-off.";
+    pendingChip.style.display = "none";
+  } else {
+    card.classList.add("locked"); gate.classList.add("locked"); gate.classList.remove("open");
+    gate.textContent = "Waiting on Shift Supervisor acknowledgment for item(s) #" + pending.join(", #") + " before SQF can sign off.";
+    pendingChip.style.display = "inline-flex";
+    pendingNum.textContent = pending.length;
+  }
+}
+
+// ---------------- Admin ----------------
+function wireAdmin(){
+  var toggleBtn = $("#adminToggleBtn"), prompt = $("#adminPrompt"), err = $("#adminErr"), attempt = $("#passcodeAttempt");
+
+  toggleBtn.addEventListener("click", function(){
+    if(document.documentElement.classList.contains("admin-mode")){
+      document.documentElement.classList.remove("admin-mode");
+      adminPasscode = null;
+      try{ sessionStorage.removeItem("adminPasscode"); }catch(e){}
+      toggleBtn.textContent = "Admin";
+      return;
+    }
+    prompt.classList.toggle("open");
+    attempt.value = ""; err.textContent = "";
+    if(prompt.classList.contains("open")) attempt.focus();
+  });
+
+  async function tryUnlock(){
+    try{
+      var res = await api("/api/admin/verify", { method: "POST", body: JSON.stringify({ passcode: attempt.value }) });
+      if(res.ok){
+        adminPasscode = attempt.value;
+        try{ sessionStorage.setItem("adminPasscode", adminPasscode); }catch(e){}
+        document.documentElement.classList.add("admin-mode");
+        prompt.classList.remove("open");
+        toggleBtn.textContent = "Admin ✓";
+        toast("Admin mode unlocked for this browser.");
+      } else {
+        err.textContent = "Incorrect passcode.";
+      }
+    }catch(e){ err.textContent = "Couldn't verify passcode: " + e.message; }
+  }
+  $("#adminSubmit").addEventListener("click", tryUnlock);
+  attempt.addEventListener("keydown", function(ev){ if(ev.key === "Enter") tryUnlock(); });
+  document.addEventListener("click", function(ev){ if(!ev.target.closest(".admin-popover")) prompt.classList.remove("open"); });
+
+  $("#newPasscode").addEventListener("change", async function(){
+    var val = this.value.trim();
+    var el = this;
+    if(!val) return;
+    try{
+      await api("/api/admin/passcode", { method: "POST", body: JSON.stringify({ passcode: val }) });
+      adminPasscode = val;
+      try{ sessionStorage.setItem("adminPasscode", val); }catch(e){}
+      el.value = "";
+      toast("Passcode updated.");
+    }catch(e){ toast("Couldn't update passcode: " + e.message); }
+  });
+}
+
+async function restoreAdminIfAny(){
+  if(!adminPasscode) return;
+  try{
+    var res = await api("/api/admin/verify", { method: "POST", body: JSON.stringify({ passcode: adminPasscode }) });
+    if(res.ok){
+      document.documentElement.classList.add("admin-mode");
+      $("#adminToggleBtn").textContent = "Admin ✓";
+    } else {
+      adminPasscode = null;
+      try{ sessionStorage.removeItem("adminPasscode"); }catch(e){}
+    }
+  }catch(e){}
+}
+
+// ---------------- Reset ----------------
+function wireReset(){
+  var btn = $("#resetBtn");
+  var armed = false, timer = null;
+  btn.addEventListener("click", async function(){
+    if(!armed){
+      armed = true; btn.textContent = "Confirm reset?"; btn.classList.add("danger-arm");
+      timer = setTimeout(function(){ armed = false; btn.textContent = "New Audit"; btn.classList.remove("danger-arm"); }, 3000);
+      return;
+    }
+    clearTimeout(timer); armed = false; btn.textContent = "New Audit"; btn.classList.remove("danger-arm");
+    try{
+      await api("/api/reset", { method: "POST" });
+      await loadState();
+      toast("New audit started — log cleared for everyone.");
+    }catch(e){ toast("Couldn't reset: " + e.message); }
+  });
+}
+
+// ---------------- Init ----------------
+async function init(){
+  wireHeaderFields();
+  wireAdmin();
+  wireReset();
+  $("#printBtn").addEventListener("click", function(){ window.print(); });
+  $("#pdfBtn").addEventListener("click", function(){ window.location.href = "/api/pdf"; });
+  try{
+    await loadState();
+  }catch(e){
+    showConnChip();
+  }
+  await restoreAdminIfAny();
+  pollLoop();
+}
+
+document.addEventListener("DOMContentLoaded", init);
+})();
+
+</script>
+</body>
+</html>
