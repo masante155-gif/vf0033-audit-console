@@ -47,9 +47,16 @@ CREATE TABLE IF NOT EXISTS items (
   preventive_measures TEXT NOT NULL DEFAULT '',
   shift INTEGER,
   initials TEXT NOT NULL DEFAULT '',
-  photo_filename TEXT
+  photo_filename TEXT,
+  notified_at TEXT
 );
 `);
+
+// Migration: add notified_at to items created before this column existed.
+const itemColumns = db.prepare("PRAGMA table_info(items)").all().map((c) => c.name);
+if (!itemColumns.includes("notified_at")) {
+  db.exec("ALTER TABLE items ADD COLUMN notified_at TEXT");
+}
 
 const settingsRow = db.prepare("SELECT id FROM settings WHERE id = 1").get();
 if (!settingsRow) {

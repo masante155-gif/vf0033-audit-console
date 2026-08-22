@@ -168,15 +168,14 @@
   .nc-entry[data-shift="4"] .shift-btn[data-slot="4"]{background:var(--accent); color:var(--accent-ink);}
   .notify-btn{border:1px solid var(--line-strong); background:var(--surface); border-radius:var(--radius-sm); font-size:11.5px; font-weight:600; padding:6px 11px;}
   .notify-btn:hover{border-color:var(--accent);}
+  .notify-btn:disabled{opacity:.6; cursor:default;}
   .notify-hint{font-size:10.5px; color:var(--ink-faint); margin-left:8px;}
   .notify-hint.err{color:var(--bad);}
-  .email-draft{margin-top:8px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface-2); padding:9px 10px;}
-  .ed-row{display:flex; gap:6px; font-size:11.5px; margin-bottom:4px;}
-  .ed-row .ed-label{color:var(--ink-faint); font-weight:600; min-width:46px;}
-  .ed-row .ed-value{color:var(--ink); word-break:break-word;}
-  .ed-body{width:100%; min-height:110px; border:1px solid var(--line); border-radius:4px; background:var(--surface); padding:6px 8px; font-size:11.8px; margin-top:2px; resize:vertical;}
-  .ed-actions{display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;}
-  .ed-hint{font-size:10.5px; color:var(--ink-faint); margin-top:6px; line-height:1.4;}
+  .nc-entry.nc-highlight{animation:ncFlash 2.4s ease;}
+  @keyframes ncFlash{
+    0%{box-shadow:0 0 0 3px var(--accent) inset; background:var(--accent-tint);}
+    100%{box-shadow:0 0 0 0 transparent inset; background:transparent;}
+  }
   a.btn.ghost{text-decoration:none; text-align:center;}
   .photo-row{display:flex; align-items:center; gap:8px;}
   .photo-pick{border:1px dashed var(--line-strong); border-radius:var(--radius-sm); font-size:11.5px; font-weight:600; padding:6px 11px; color:var(--ink-muted); display:inline-flex;}
@@ -635,51 +634,50 @@ function renderChecklist(){
 }
 
 // ---------------- Non-Conformance panel ----------------
-function buildEmailDraft(){
-  var draft = document.createElement("div");
-  draft.className = "email-draft";
-  draft.hidden = true;
-  draft.innerHTML =
-    '<div class="ed-row"><span class="ed-label">To</span><span class="ed-value" data-role="ed-to"></span></div>' +
-    '<div class="ed-row"><span class="ed-label">Subject</span><span class="ed-value" data-role="ed-subject"></span></div>' +
-    '<textarea class="ed-body" data-role="ed-body" readonly></textarea>' +
-    '<div class="ed-actions"><button type="button" class="btn primary" data-act="copy-email">Copy details</button></div>' +
-    '<div class="ed-hint">Copy the details above and paste them into a new email to the address shown.</div>';
-  $('[data-act="copy-email"]', draft).addEventListener("click", function(){
-    var to = $('[data-role="ed-to"]', draft).textContent;
-    var subj = $('[data-role="ed-subject"]', draft).textContent;
-    var bodyText = $('[data-role="ed-body"]', draft).value;
-    copyToClipboard("To: " + to + "\nSubject: " + subj + "\n\n" + bodyText);
-  });
-  return draft;
-}
-
 function setNotifyHint(entry, msg, isErr){
   var hint = entry._refs.notifyHint;
   hint.textContent = msg;
   hint.classList.toggle("err", !!isErr);
 }
 
-function handleNotify(item, entry){
+function notifiedHintText(item){
+  if(!item.notified_at) return "";
+  try{
+    var d = new Date(item.notified_at);
+    return "Emailed the shift supervisor " + d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + ".";
+  }catch(e){ return "Emailed the shift supervisor."; }
+}
+
+async function handleNotify(item, entry, btn){
   var slot = item.shift;
   if(!slot){ setNotifyHint(entry, "Pick a shift above first.", true); return; }
   var email = STATE.settings["shift" + slot + "_email"];
   if(!email){ setNotifyHint(entry, "No supervisor email on file for that shift — add one in Admin.", true); return; }
 
-  var subject = "GMP Deviation #" + item.id + " — acknowledgment needed";
-  var body = "Deviation #" + item.id + " was logged on the VF-0033-00 GMP audit.\n\n" +
-    "Audit date: " + (STATE.settings.audit_date || "(unspecified)") + "\nAuditor: " + (STATE.settings.auditor || "(unspecified)") + "\n\n" +
-    "Description: " + (item.description || "(no description entered)") +
-    "\nCorrective action: " + (item.corrective_action || "(not yet entered)") +
-    "\nPreventive measures: " + (item.preventive_measures || "(not yet entered)") + "\n\n" +
-    "Please reply or add your initials in the Audit Console to acknowledge.";
+  btn.disabled = true;
+  var prevLabel = btn.textContent;
+  btn.textContent = "Sending…";
+  setNotifyHint(entry, "", false);
+  try{
+    var res = await api("/api/items/" + item.id + "/notify", { method: "POST" });
+    item.notified_at = res.item.notified_at;
+    setNotifyHint(entry, notifiedHintText(item), false);
+    toast("Emailed " + res.sentTo + ".");
+  }catch(e){
+    setNotifyHint(entry, e.message, true);
+    toast("Couldn't send: " + e.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = prevLabel;
+  }
+}
 
-  var draft = entry._refs.draft;
-  $('[data-role="ed-to"]', draft).textContent = email;
-  $('[data-role="ed-subject"]', draft).textContent = subject;
-  $('[data-role="ed-body"]', draft).value = body;
-  draft.hidden = false;
-  setNotifyHint(entry, "Draft ready below.", false);
+function highlightNcEntry(id){
+  var entry = $('.nc-entry[data-item-id="' + id + '"]');
+  if(!entry) return;
+  entry.scrollIntoView({ behavior: "smooth", block: "center" });
+  entry.classList.add("nc-highlight");
+  setTimeout(function(){ entry.classList.remove("nc-highlight"); }, 2600);
 }
 
 async function handlePhotoPick(id, fileInput, entry){
@@ -801,12 +799,11 @@ function buildNcCard(item){
   var notifyBtn = document.createElement("button");
   notifyBtn.type = "button"; notifyBtn.className = "notify-btn"; notifyBtn.textContent = "Email Shift Supervisor";
   var notifyHint = document.createElement("span"); notifyHint.className = "notify-hint";
-  notifyBtn.addEventListener("click", function(){ handleNotify(item, entry); });
-  var draft = buildEmailDraft();
-  notifyWrap.appendChild(notifyBtn); notifyWrap.appendChild(notifyHint); notifyWrap.appendChild(draft);
+  notifyBtn.addEventListener("click", function(){ handleNotify(item, entry, notifyBtn); });
+  notifyWrap.appendChild(notifyBtn); notifyWrap.appendChild(notifyHint);
   entry.appendChild(notifyWrap);
+  entry._refs.notifyBtn = notifyBtn;
   entry._refs.notifyHint = notifyHint;
-  entry._refs.draft = draft;
 
   var photoWrap = document.createElement("div"); photoWrap.className = "nc-field";
   var photoLabel = document.createElement("label"); photoLabel.textContent = "Photo of Location";
@@ -847,6 +844,9 @@ function updateNcCardFields(entry, item){
     r.removeBtn.hidden = true;
   }
   updateAckBadge(entry, item.initials);
+  if(r.notifyHint && !r.notifyHint.classList.contains("err")){
+    r.notifyHint.textContent = notifiedHintText(item);
+  }
 }
 
 function refreshNcEmptyState(){
@@ -994,7 +994,15 @@ async function init(){
     showConnChip();
   }
   await restoreAdminIfAny();
+  jumpToLinkedEntry();
   pollLoop();
+}
+
+function jumpToLinkedEntry(){
+  var params = new URLSearchParams(window.location.search);
+  var id = params.get("nc");
+  if(!id) return;
+  setTimeout(function(){ highlightNcEntry(Number(id)); }, 150);
 }
 
 document.addEventListener("DOMContentLoaded", init);

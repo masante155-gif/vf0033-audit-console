@@ -6,9 +6,16 @@ const multer = require("multer");
 const sharp = require("sharp");
 const { db, bumpRevision, DATA_DIR } = require("./db");
 const { generatePdf } = require("./pdf");
+const { sendMail, isConfigured: mailConfigured } = require("./mailer");
 
 const app = express();
+app.set("trust proxy", true);
 app.use(express.json({ limit: "2mb" }));
+
+function baseUrl(req) {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/$/, "");
+  return req.protocol + "://" + req.get("host");
+}
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
@@ -132,6 +139,71 @@ app.post("/api/items/:id/nc", (req, res) => {
   res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id) });
 });
 
+function shiftName(settings, slot) {
+  if (!slot) return null;
+  return settings["shift" + slot + "_name"] || ("Shift " + slot);
+}
+
+app.get("/api/mail-status", (req, res) => {
+  res.json({ configured: mailConfigured() });
+});
+
+app.post("/api/items/:id/notify", async (req, res) => {
+  const id = Number(req.params.id);
+  const item = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
+  if (!item) return res.status(404).json({ error: "Item not found." });
+  if (item.status !== "U") return res.status(400).json({ error: "This item isn't marked Unacceptable." });
+  if (!item.shift) return res.status(400).json({ error: "Pick a shift for this deviation first." });
+
+  const settings = getSettings();
+  const email = settings["shift" + item.shift + "_email"];
+  if (!email || !email.trim()) {
+    return res.status(400).json({ error: "No supervisor email is on file for that shift — add one in Admin." });
+  }
+
+  const link = baseUrl(req) + "/?nc=" + id;
+  const shift = shiftName(settings, item.shift);
+  const subject = "GMP Deviation #" + id + " needs your acknowledgment — " + (settings.title || "Floor Audit Console");
+  const text =
+    "A Non-Conformance was logged on the " + (settings.title || "Floor Audit Console") + " and needs " + shift + " Supervisor acknowledgment.\n\n" +
+    "Item #" + id + " — " + item.section + "\n" +
+    "Audit date: " + (settings.audit_date || "(unspecified)") + "\n" +
+    "Auditor: " + (settings.auditor || "(unspecified)") + "\n\n" +
+    "Description: " + (item.description || item.text) + "\n" +
+    "Corrective action taken: " + (item.corrective_action || "(not yet entered)") + "\n" +
+    "Preventive measures: " + (item.preventive_measures || "(not yet entered)") + "\n\n" +
+    "Please open the link below, review the deviation, and enter your initials to acknowledge it. " +
+    "SQF sign-off is locked until this is acknowledged.\n\n" +
+    link;
+  const html =
+    "<p>A Non-Conformance was logged on the <b>" + escapeHtml(settings.title || "Floor Audit Console") + "</b> and needs <b>" + escapeHtml(shift) + " Supervisor</b> acknowledgment.</p>" +
+    "<p><b>Item #" + id + " — " + escapeHtml(item.section) + "</b><br>" +
+    "Audit date: " + escapeHtml(settings.audit_date || "(unspecified)") + "<br>" +
+    "Auditor: " + escapeHtml(settings.auditor || "(unspecified)") + "</p>" +
+    "<p><b>Description:</b> " + escapeHtml(item.description || item.text) + "<br>" +
+    "<b>Corrective action taken:</b> " + escapeHtml(item.corrective_action || "(not yet entered)") + "<br>" +
+    "<b>Preventive measures:</b> " + escapeHtml(item.preventive_measures || "(not yet entered)") + "</p>" +
+    "<p>Please open the link below, review the deviation, and enter your initials to acknowledge it. SQF sign-off is locked until this is acknowledged.</p>" +
+    '<p><a href="' + link + '">' + link + "</a></p>";
+
+  try {
+    await sendMail({ to: email, subject, text, html });
+  } catch (e) {
+    return res.status(502).json({ error: e.message });
+  }
+
+  const now = new Date().toISOString();
+  db.prepare("UPDATE items SET notified_at = ? WHERE id = ?").run(now, id);
+  bumpRevision();
+  res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id), sentTo: email });
+});
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
 app.post("/api/items/:id/clear", (req, res) => {
   const id = Number(req.params.id);
   const item = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
@@ -141,7 +213,7 @@ app.post("/api/items/:id/clear", (req, res) => {
     fs.existsSync(p) && fs.unlinkSync(p);
   }
   db.prepare(
-    "UPDATE items SET description='', corrective_action='', preventive_measures='', initials='', shift=NULL, photo_filename=NULL WHERE id = ?"
+    "UPDATE items SET description='', corrective_action='', preventive_measures='', initials='', shift=NULL, photo_filename=NULL, notified_at=NULL WHERE id = ?"
   ).run(id);
   bumpRevision();
   res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id) });
@@ -229,7 +301,7 @@ app.post("/api/reset", (req, res) => {
     }
   }
   db.prepare(
-    "UPDATE items SET status='', description='', corrective_action='', preventive_measures='', initials='', shift=NULL, photo_filename=NULL"
+    "UPDATE items SET status='', description='', corrective_action='', preventive_measures='', initials='', shift=NULL, photo_filename=NULL, notified_at=NULL"
   ).run();
   db.prepare(
     "UPDATE settings SET auditor='', audit_date='', qa_initials='', reviewed_by='', reviewed_date='' WHERE id = 1"
