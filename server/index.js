@@ -22,6 +22,7 @@ const SETTINGS_ADMIN_FIELDS = [
   "eyebrow", "title", "subtitle", "review_due", "revision_date",
   "shift1_name", "shift1_email", "shift2_name", "shift2_email",
   "shift3_name", "shift3_email", "shift4_name", "shift4_email",
+  "shift1_lead_email", "shift2_lead_email", "shift3_lead_email", "shift4_lead_email",
   "emailjs_service_id", "emailjs_template_id", "emailjs_public_key",
 ];
 const SETTINGS_OPEN_FIELDS = ["auditor", "audit_date", "qa_initials"];
@@ -32,6 +33,12 @@ function getSettings() {
 }
 function getItems() {
   return db.prepare("SELECT * FROM items ORDER BY sort_order ASC").all();
+}
+function getDepartments() {
+  return db.prepare("SELECT * FROM departments ORDER BY rowid ASC").all();
+}
+function getDepartment(section) {
+  return db.prepare("SELECT * FROM departments WHERE section = ?").get(section);
 }
 function gateOpen() {
   const openItems = db.prepare("SELECT initials FROM items WHERE status = 'U'").all();
@@ -48,7 +55,21 @@ function requireAdmin(req, res, next) {
 }
 
 app.get("/api/state", (req, res) => {
-  res.json({ settings: getSettings(), items: getItems(), gateOpen: gateOpen() });
+  res.json({ settings: getSettings(), items: getItems(), departments: getDepartments(), gateOpen: gateOpen() });
+});
+
+app.post("/api/departments", requireAdmin, (req, res) => {
+  const { section, head_email, is_production_line } = req.body || {};
+  if (!section) return res.status(400).json({ error: "section is required." });
+  const existing = db.prepare("SELECT * FROM departments WHERE section = ?").get(section);
+  if (!existing) return res.status(404).json({ error: "Unknown department/section." });
+  db.prepare("UPDATE departments SET head_email = ?, is_production_line = ? WHERE section = ?").run(
+    String(head_email || ""),
+    is_production_line ? 1 : 0,
+    section
+  );
+  bumpRevision();
+  res.json({ ok: true, department: db.prepare("SELECT * FROM departments WHERE section = ?").get(section) });
 });
 
 app.get("/api/revision", (req, res) => {
@@ -163,20 +184,39 @@ app.get("/api/items/:id/notify-payload", (req, res) => {
   const item = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
   if (!item) return res.status(404).json({ error: "Item not found." });
   if (item.status !== "U") return res.status(400).json({ error: "This item isn't marked Unacceptable." });
-  if (!item.shift) return res.status(400).json({ error: "Pick a shift for this deviation first." });
 
   const settings = getSettings();
-  const email = settings["shift" + item.shift + "_email"];
-  if (!email || !email.trim()) {
-    return res.status(400).json({ error: "No supervisor email is on file for that shift — add one in Admin." });
+  const dept = getDepartment(item.section);
+  const shift = shiftName(settings, item.shift);
+
+  // Every department gets its head notified. Departments flagged as
+  // production-line ALSO alert the shift supervisor and lead for whichever
+  // shift the deviation was logged against.
+  const recipients = [];
+  if (dept && dept.head_email && dept.head_email.trim()) {
+    recipients.push({ email: dept.head_email.trim(), label: "Department Head" });
+  }
+  if (dept && dept.is_production_line) {
+    if (!item.shift) {
+      return res.status(400).json({ error: "Pick a shift for this deviation first — this is a production line department." });
+    }
+    const supEmail = settings["shift" + item.shift + "_email"];
+    const leadEmail = settings["shift" + item.shift + "_lead_email"];
+    if (supEmail && supEmail.trim()) recipients.push({ email: supEmail.trim(), label: shift + " Supervisor" });
+    if (leadEmail && leadEmail.trim()) recipients.push({ email: leadEmail.trim(), label: shift + " Lead" });
+  }
+  if (recipients.length === 0) {
+    return res.status(400).json({
+      error: "No recipients configured for this department — set a department head (and shift contacts if this is production line) in Admin.",
+    });
   }
 
   const link = baseUrl(req) + "/?nc=" + id;
-  const shift = shiftName(settings, item.shift);
-  const subject = "GMP Deviation #" + id + " needs your acknowledgment — " + (settings.title || "Floor Audit Console");
+  const subject = "GMP Deviation #" + id + " needs review — " + (settings.title || "Floor Audit Console");
   const message =
-    "A Non-Conformance was logged on the " + (settings.title || "Floor Audit Console") + " and needs " + shift + " Supervisor acknowledgment.\n\n" +
+    "A Non-Conformance was logged on the " + (settings.title || "Floor Audit Console") + ".\n\n" +
     "Item #" + id + " — " + item.section + "\n" +
+    (shift ? "Shift: " + shift + "\n" : "") +
     "Audit date: " + (settings.audit_date || "(unspecified)") + "\n" +
     "Auditor: " + (settings.auditor || "(unspecified)") + "\n\n" +
     "Description: " + (item.description || item.text) + "\n" +
@@ -186,7 +226,10 @@ app.get("/api/items/:id/notify-payload", (req, res) => {
     "SQF sign-off is locked until this is acknowledged.\n\n" +
     link;
 
-  res.json({ ok: true, to: email, subject, message, link, shift, itemId: id });
+  const to = recipients.map((r) => r.email).join(",");
+  const recipientSummary = recipients.map((r) => r.label).join(", ");
+
+  res.json({ ok: true, to, recipientSummary, subject, message, link, shift, itemId: id });
 });
 
 // Called after the browser confirms EmailJS actually sent the message.

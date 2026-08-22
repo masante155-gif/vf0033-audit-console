@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS settings (
   shift3_email TEXT NOT NULL DEFAULT '',
   shift4_name TEXT NOT NULL DEFAULT 'D',
   shift4_email TEXT NOT NULL DEFAULT '',
+  shift1_lead_email TEXT NOT NULL DEFAULT '',
+  shift2_lead_email TEXT NOT NULL DEFAULT '',
+  shift3_lead_email TEXT NOT NULL DEFAULT '',
+  shift4_lead_email TEXT NOT NULL DEFAULT '',
   emailjs_service_id TEXT NOT NULL DEFAULT '',
   emailjs_template_id TEXT NOT NULL DEFAULT '',
   emailjs_public_key TEXT NOT NULL DEFAULT '',
@@ -53,6 +57,12 @@ CREATE TABLE IF NOT EXISTS items (
   photo_filename TEXT,
   notified_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS departments (
+  section TEXT PRIMARY KEY,
+  head_email TEXT NOT NULL DEFAULT '',
+  is_production_line INTEGER NOT NULL DEFAULT 0
+);
 `);
 
 // Migration: add notified_at to items created before this column existed.
@@ -61,9 +71,12 @@ if (!itemColumns.includes("notified_at")) {
   db.exec("ALTER TABLE items ADD COLUMN notified_at TEXT");
 }
 
-// Migration: add EmailJS config columns to settings rows created before they existed.
+// Migration: add EmailJS config + shift lead columns to settings rows created before they existed.
 const settingsColumns = db.prepare("PRAGMA table_info(settings)").all().map((c) => c.name);
-for (const col of ["emailjs_service_id", "emailjs_template_id", "emailjs_public_key"]) {
+for (const col of [
+  "emailjs_service_id", "emailjs_template_id", "emailjs_public_key",
+  "shift1_lead_email", "shift2_lead_email", "shift3_lead_email", "shift4_lead_email",
+]) {
   if (!settingsColumns.includes(col)) {
     db.exec("ALTER TABLE settings ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''");
   }
@@ -90,6 +103,14 @@ if (itemCount === 0) {
   });
   insertMany(SECTIONS);
 }
+
+// Seed one department row per checklist section (each section IS a
+// department). Idempotent, so it also fills in any section added later.
+const deptInsert = db.prepare("INSERT OR IGNORE INTO departments (section) VALUES (?)");
+const deptSeed = db.transaction((rows) => {
+  for (const [section] of rows) deptInsert.run(section);
+});
+deptSeed(SECTIONS);
 
 function bumpRevision() {
   db.prepare("UPDATE settings SET revision = revision + 1 WHERE id = 1").run();

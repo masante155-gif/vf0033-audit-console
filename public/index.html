@@ -104,6 +104,13 @@
   .admin-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:14px;}
   .admin-grid .field input{border:1px solid var(--line); border-radius:4px; padding:6px 8px; width:100%; min-width:0;}
   .admin-note{font-size:11.5px; color:var(--ink-muted); background:var(--accent-tint); border-radius:var(--radius-sm); padding:8px 10px; margin-top:6px;}
+  .dept-table{display:flex; flex-direction:column; gap:6px; margin-bottom:8px;}
+  .dept-row{display:grid; grid-template-columns:minmax(160px,2fr) minmax(160px,1fr) auto; gap:10px; align-items:center; padding:6px 0; border-bottom:1px solid var(--line);}
+  .dept-row:last-child{border-bottom:none;}
+  .dept-name{font-size:12px; color:var(--ink); line-height:1.35;}
+  .dept-head-email{border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:12.5px; width:100%; min-width:0; font-family:inherit;}
+  .dept-line-check{display:flex; align-items:center; gap:6px; font-size:11px; color:var(--ink-muted); white-space:nowrap;}
+  @media (max-width:640px){.dept-row{grid-template-columns:1fr;}}
 
   /* ---- Layout ---- */
   .layout{display:grid; grid-template-columns:1fr 420px; gap:22px; align-items:start; margin-top:22px;}
@@ -262,20 +269,27 @@
     <div class="admin-grid">
       <div class="field"><label>Shift 1 Name</label><input type="text" id="shiftName1"></div>
       <div class="field"><label>Shift 1 Supervisor Email</label><input type="text" id="shiftEmail1" placeholder="name@company.com"></div>
+      <div class="field"><label>Shift 1 Lead Email</label><input type="text" id="shiftLeadEmail1" placeholder="name@company.com"></div>
       <div class="field"><label>Shift 2 Name</label><input type="text" id="shiftName2"></div>
       <div class="field"><label>Shift 2 Supervisor Email</label><input type="text" id="shiftEmail2" placeholder="name@company.com"></div>
+      <div class="field"><label>Shift 2 Lead Email</label><input type="text" id="shiftLeadEmail2" placeholder="name@company.com"></div>
       <div class="field"><label>Shift 3 Name</label><input type="text" id="shiftName3"></div>
       <div class="field"><label>Shift 3 Supervisor Email</label><input type="text" id="shiftEmail3" placeholder="name@company.com"></div>
+      <div class="field"><label>Shift 3 Lead Email</label><input type="text" id="shiftLeadEmail3" placeholder="name@company.com"></div>
       <div class="field"><label>Shift 4 Name</label><input type="text" id="shiftName4"></div>
       <div class="field"><label>Shift 4 Supervisor Email</label><input type="text" id="shiftEmail4" placeholder="name@company.com"></div>
+      <div class="field"><label>Shift 4 Lead Email</label><input type="text" id="shiftLeadEmail4" placeholder="name@company.com"></div>
     </div>
+    <h3>Departments</h3>
+    <div class="dept-table" id="deptTable"></div>
+    <div class="admin-note">Each checklist section is treated as a department. Set a department head email and any Unacceptable item in that section will email them. Check &ldquo;Production line&rdquo; for sections where a deviation should <em>also</em> alert the shift supervisor and lead picked on that entry.</div>
     <h3>Email Setup (EmailJS)</h3>
     <div class="admin-grid">
       <div class="field"><label>EmailJS Service ID</label><input type="text" id="emailjsServiceId" placeholder="e.g. service_abc1234"></div>
       <div class="field"><label>EmailJS Template ID</label><input type="text" id="emailjsTemplateId" placeholder="e.g. template_xyz9876"></div>
       <div class="field"><label>EmailJS Public Key</label><input type="text" id="emailjsPublicKey" placeholder="from Account &rarr; API Keys"></div>
     </div>
-    <div class="admin-note">These three values come from your EmailJS account (emailjs.com) after you connect your Gmail as an Email Service and create a template. Once set, the "Email Shift Supervisor" button sends straight from your connected Gmail — no server email setup needed.</div>
+    <div class="admin-note">These three values come from your EmailJS account (emailjs.com) after you connect your Gmail as an Email Service and create a template. Once set, the "Send Notification" button sends straight from your connected Gmail — no server email setup needed.</div>
     <div class="admin-note">Add or remove checklist items with the &ldquo;+ Add item&rdquo; button at the bottom of each section, or the &times; next to a row. The eyebrow label, title, and subtitle at the top are also editable directly while Admin mode is on. This app is now hosted on its own server, so every change here is saved to a real database &mdash; no dependency on Claude's hosting.</div>
   </div>
 
@@ -418,11 +432,13 @@ function renderHeader(){
   for(var i = 1; i <= 4; i++){
     setValueIfIdle($("#shiftName" + i), s["shift" + i + "_name"]);
     setValueIfIdle($("#shiftEmail" + i), s["shift" + i + "_email"]);
+    setValueIfIdle($("#shiftLeadEmail" + i), s["shift" + i + "_lead_email"]);
   }
   setValueIfIdle($("#emailjsServiceId"), s.emailjs_service_id);
   setValueIfIdle($("#emailjsTemplateId"), s.emailjs_template_id);
   setValueIfIdle($("#emailjsPublicKey"), s.emailjs_public_key);
   $("#footerRevDate").textContent = s.revision_date || "—";
+  syncDepartmentsTable();
 }
 
 function bindOpenField(elId, key){
@@ -477,12 +493,70 @@ function wireHeaderFields(){
   for(var i = 1; i <= 4; i++){
     (function(n){
       bindAdminField("shiftName" + n, "shift" + n + "_name", refreshShiftLabelsInOpenCards);
-      bindAdminField("shiftEmail" + n, "shift" + n + "_email");
+      bindAdminField("shiftEmail" + n, "shift" + n + "_email", refreshNotifyHintsInOpenCards);
+      bindAdminField("shiftLeadEmail" + n, "shift" + n + "_lead_email", refreshNotifyHintsInOpenCards);
     })(i);
   }
   bindAdminField("emailjsServiceId", "emailjs_service_id");
   bindAdminField("emailjsTemplateId", "emailjs_template_id");
   bindAdminField("emailjsPublicKey", "emailjs_public_key");
+}
+
+// ---------------- Departments ----------------
+var deptRowRefs = [];
+
+function buildDepartmentsTable(){
+  var container = $("#deptTable");
+  container.innerHTML = "";
+  deptRowRefs = [];
+  (STATE.departments || []).forEach(function(d){
+    var row = document.createElement("div"); row.className = "dept-row";
+    var name = document.createElement("div"); name.className = "dept-name"; name.textContent = d.section;
+    var emailInput = document.createElement("input");
+    emailInput.type = "text"; emailInput.className = "dept-head-email"; emailInput.placeholder = "head@company.com";
+    var checkLabel = document.createElement("label"); checkLabel.className = "dept-line-check";
+    var checkbox = document.createElement("input"); checkbox.type = "checkbox";
+    checkLabel.appendChild(checkbox);
+    checkLabel.appendChild(document.createTextNode(" Production line"));
+    row.appendChild(name); row.appendChild(emailInput); row.appendChild(checkLabel);
+    container.appendChild(row);
+
+    var ref = { section: d.section, emailInput: emailInput, checkbox: checkbox };
+    deptRowRefs.push(ref);
+
+    function saveDept(){
+      debounceSave("dept-" + ref.section, function(){
+        api("/api/departments", { method: "POST", body: JSON.stringify({
+          section: ref.section,
+          head_email: emailInput.value,
+          is_production_line: checkbox.checked
+        })}).catch(function(e){ toast("Couldn't save (is Admin unlocked?): " + e.message); loadState(); });
+      });
+    }
+    function findDept(){
+      return (STATE.departments || []).find(function(x){ return x.section === ref.section; });
+    }
+    emailInput.addEventListener("input", function(){
+      var dep = findDept(); if(dep) dep.head_email = emailInput.value;
+      refreshNotifyHintsInOpenCards();
+      saveDept();
+    });
+    checkbox.addEventListener("change", function(){
+      var dep = findDept(); if(dep) dep.is_production_line = checkbox.checked ? 1 : 0;
+      refreshNotifyHintsInOpenCards();
+      saveDept();
+    });
+  });
+}
+
+function syncDepartmentsTable(){
+  if(deptRowRefs.length !== (STATE.departments || []).length){ buildDepartmentsTable(); }
+  deptRowRefs.forEach(function(ref){
+    var dep = (STATE.departments || []).find(function(x){ return x.section === ref.section; });
+    if(!dep) return;
+    setValueIfIdle(ref.emailInput, dep.head_email);
+    ref.checkbox.checked = !!dep.is_production_line;
+  });
 }
 
 // ---------------- Checklist ----------------
@@ -658,15 +732,47 @@ function notifiedHintText(item){
   if(!item.notified_at) return "";
   try{
     var d = new Date(item.notified_at);
-    return "Emailed the shift supervisor " + d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + ".";
-  }catch(e){ return "Emailed the shift supervisor."; }
+    return "Emailed " + d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + ".";
+  }catch(e){ return "Emailed."; }
+}
+
+// Works out, purely from data already loaded client-side, who a deviation's
+// notification would go to: the section's department head always, plus the
+// shift supervisor + lead if that section is flagged as production line.
+function computeRecipients(item){
+  var dept = (STATE.departments || []).find(function(d){ return d.section === item.section; });
+  var recipients = [];
+  if(dept && dept.head_email && dept.head_email.trim()){
+    recipients.push({ email: dept.head_email.trim(), label: "Department Head" });
+  }
+  var requiresShift = !!(dept && dept.is_production_line);
+  if(requiresShift && item.shift){
+    var shiftLabel = STATE.settings["shift" + item.shift + "_name"] || ("Shift " + item.shift);
+    var supEmail = STATE.settings["shift" + item.shift + "_email"];
+    var leadEmail = STATE.settings["shift" + item.shift + "_lead_email"];
+    if(supEmail && supEmail.trim()) recipients.push({ email: supEmail.trim(), label: shiftLabel + " Supervisor" });
+    if(leadEmail && leadEmail.trim()) recipients.push({ email: leadEmail.trim(), label: shiftLabel + " Lead" });
+  }
+  return { dept: dept, recipients: recipients, requiresShift: requiresShift };
+}
+
+function recipientPreviewText(item){
+  if(item.notified_at) return notifiedHintText(item);
+  var info = computeRecipients(item);
+  if(info.requiresShift && !item.shift) return "Pick a shift above — this is a production line department.";
+  if(info.recipients.length === 0) return "No recipients configured — set a department head in Admin.";
+  return "Sends to: " + info.recipients.map(function(r){ return r.label; }).join(", ");
+}
+
+function refreshNotifyHintsInOpenCards(){
+  $all(".nc-entry").forEach(function(entry){
+    var id = Number(entry.dataset.itemId);
+    var item = STATE.items.find(function(i){ return i.id === id; });
+    if(item) updateNcCardFields(entry, item);
+  });
 }
 
 async function handleNotify(item, entry, btn){
-  var slot = item.shift;
-  if(!slot){ setNotifyHint(entry, "Pick a shift above first.", true); return; }
-  var email = STATE.settings["shift" + slot + "_email"];
-  if(!email){ setNotifyHint(entry, "No supervisor email on file for that shift — add one in Admin.", true); return; }
   var s = STATE.settings;
   if(!s.emailjs_service_id || !s.emailjs_template_id || !s.emailjs_public_key){
     setNotifyHint(entry, "Email isn't set up yet — add your EmailJS keys in Admin.", true);
@@ -674,6 +780,15 @@ async function handleNotify(item, entry, btn){
   }
   if(typeof emailjs === "undefined"){
     setNotifyHint(entry, "Email service didn't load — check your connection and try again.", true);
+    return;
+  }
+  var info = computeRecipients(item);
+  if(info.requiresShift && !item.shift){
+    setNotifyHint(entry, "Pick a shift above first — this is a production line department.", true);
+    return;
+  }
+  if(info.recipients.length === 0){
+    setNotifyHint(entry, "No recipients configured — set a department head in Admin.", true);
     return;
   }
 
@@ -688,13 +803,13 @@ async function handleNotify(item, entry, btn){
       subject: payload.subject,
       message: payload.message,
       link: payload.link,
-      shift: payload.shift
+      shift: payload.shift || ""
     }, { publicKey: s.emailjs_public_key });
 
     var res = await api("/api/items/" + item.id + "/notify", { method: "POST", body: JSON.stringify({ sentTo: payload.to }) });
     item.notified_at = res.item.notified_at;
     setNotifyHint(entry, notifiedHintText(item), false);
-    toast("Emailed " + payload.to + ".");
+    toast("Emailed " + (payload.recipientSummary || payload.to) + ".");
   }catch(e){
     var msg = (e && e.text) || (e && e.message) || "Couldn't send the email.";
     setNotifyHint(entry, msg, true);
@@ -830,7 +945,7 @@ function buildNcCard(item){
 
   var notifyWrap = document.createElement("div"); notifyWrap.className = "nc-field no-print";
   var notifyBtn = document.createElement("button");
-  notifyBtn.type = "button"; notifyBtn.className = "notify-btn"; notifyBtn.textContent = "Email Shift Supervisor";
+  notifyBtn.type = "button"; notifyBtn.className = "notify-btn"; notifyBtn.textContent = "Send Notification";
   var notifyHint = document.createElement("span"); notifyHint.className = "notify-hint";
   notifyBtn.addEventListener("click", function(){ handleNotify(item, entry, notifyBtn); });
   notifyWrap.appendChild(notifyBtn); notifyWrap.appendChild(notifyHint);
@@ -878,7 +993,7 @@ function updateNcCardFields(entry, item){
   }
   updateAckBadge(entry, item.initials);
   if(r.notifyHint && !r.notifyHint.classList.contains("err")){
-    r.notifyHint.textContent = notifiedHintText(item);
+    r.notifyHint.textContent = recipientPreviewText(item);
   }
 }
 
