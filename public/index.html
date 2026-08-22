@@ -1122,9 +1122,9 @@ function wireReset(){
     }
     clearTimeout(timer); armed = false; btn.textContent = "New Audit"; btn.classList.remove("danger-arm");
     try{
-      await api("/api/reset", { method: "POST" });
+      var result = await api("/api/reset", { method: "POST" });
       await loadState();
-      toast("New audit started — log cleared for everyone.");
+      toast(result && result.archived ? "Previous audit archived for trends — log cleared for everyone." : "New audit started — log cleared for everyone.");
     }catch(e){ toast("Couldn't reset: " + e.message); }
   });
 }
