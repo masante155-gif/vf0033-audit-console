@@ -63,6 +63,37 @@ CREATE TABLE IF NOT EXISTS departments (
   head_email TEXT NOT NULL DEFAULT '',
   is_production_line INTEGER NOT NULL DEFAULT 0
 );
+
+-- One row per archived audit ("New Audit" snapshots the live log here
+-- before clearing it), so pass rates and recurring issues can be trended
+-- over time instead of being lost on every reset.
+CREATE TABLE IF NOT EXISTS audit_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  audit_date TEXT NOT NULL DEFAULT '',
+  auditor TEXT NOT NULL DEFAULT '',
+  reviewed_by TEXT NOT NULL DEFAULT '',
+  reviewed_date TEXT NOT NULL DEFAULT '',
+  archived_at TEXT NOT NULL DEFAULT (datetime('now')),
+  total INTEGER NOT NULL DEFAULT 0,
+  accepted INTEGER NOT NULL DEFAULT 0,
+  unacceptable INTEGER NOT NULL DEFAULT 0
+);
+
+-- Frozen copy of every checklist item's result at the moment an audit was
+-- archived. item_id is kept for reference but section + item_text are the
+-- durable join keys, since checklist items can be edited or added later.
+CREATE TABLE IF NOT EXISTS audit_snapshot_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  snapshot_id INTEGER NOT NULL REFERENCES audit_snapshots(id),
+  item_id INTEGER,
+  section TEXT NOT NULL,
+  item_text TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT '',
+  shift INTEGER,
+  initials TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_snapshot_items_snapshot ON audit_snapshot_items(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_snapshot_items_status ON audit_snapshot_items(status);
 `);
 
 // Migration: add notified_at to items created before this column existed.

@@ -44,6 +44,49 @@ function gateOpen() {
   const openItems = db.prepare("SELECT initials FROM items WHERE status = 'U'").all();
   return openItems.every((i) => i.initials && i.initials.trim().length > 0);
 }
+
+// Freezes the current live checklist into audit_snapshots/audit_snapshot_items
+// so pass rates and recurring issues can be trended across audits. Called
+// from /api/reset right before it wipes the log for the next audit. Skips
+// archiving if nothing was actually reviewed yet (an accidental/empty reset
+// shouldn't leave a hollow entry in the history).
+const archiveCurrentAudit = db.transaction(() => {
+  const settings = getSettings();
+  const items = getItems();
+  const accepted = items.filter((i) => i.status === "A").length;
+  const unacceptable = items.filter((i) => i.status === "U").length;
+  if (accepted + unacceptable === 0) return null;
+
+  const info = db
+    .prepare(
+      "INSERT INTO audit_snapshots (audit_date, auditor, reviewed_by, reviewed_date, total, accepted, unacceptable) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+    .run(settings.audit_date || "", settings.auditor || "", settings.reviewed_by || "", settings.reviewed_date || "", items.length, accepted, unacceptable);
+
+  const insertItem = db.prepare(
+    "INSERT INTO audit_snapshot_items (snapshot_id, item_id, section, item_text, status, shift, initials) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  );
+  for (const item of items) {
+    insertItem.run(info.lastInsertRowid, item.id, item.section, item.text, item.status || "", item.shift, item.initials || "");
+  }
+  return info.lastInsertRowid;
+});
+
+function getAuditSnapshots(limit) {
+  return db.prepare("SELECT * FROM audit_snapshots ORDER BY id DESC LIMIT ?").all(limit).reverse();
+}
+function getRecurringIssues(limit) {
+  return db
+    .prepare(
+      `SELECT section, item_text, COUNT(*) AS times_flagged
+       FROM audit_snapshot_items
+       WHERE status = 'U'
+       GROUP BY section, item_text
+       ORDER BY times_flagged DESC, item_text ASC
+       LIMIT ?`
+    )
+    .all(limit);
+}
 function checkAdmin(req) {
   const provided = req.headers["x-admin-passcode"] || "";
   const settings = getSettings();
@@ -334,6 +377,8 @@ app.delete("/api/items/:id/photo", (req, res) => {
 });
 
 app.post("/api/reset", (req, res) => {
+  const snapshotId = archiveCurrentAudit();
+
   const items = db.prepare("SELECT id, photo_filename FROM items").all();
   for (const item of items) {
     if (item.photo_filename) {
@@ -348,11 +393,15 @@ app.post("/api/reset", (req, res) => {
     "UPDATE settings SET auditor='', audit_date='', qa_initials='', reviewed_by='', reviewed_date='' WHERE id = 1"
   ).run();
   bumpRevision();
-  res.json({ ok: true });
+  res.json({ ok: true, archived: snapshotId !== null });
 });
 
 app.get("/api/pdf", (req, res) => {
-  generatePdf(res, { settings: getSettings(), items: getItems() });
+  const history = {
+    snapshots: getAuditSnapshots(10),
+    recurringIssues: getRecurringIssues(8),
+  };
+  generatePdf(res, { settings: getSettings(), items: getItems(), history });
 });
 
 app.use("/uploads", express.static(path.join(DATA_DIR, "uploads"), { maxAge: "30d" }));
