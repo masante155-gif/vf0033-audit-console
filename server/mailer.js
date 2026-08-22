@@ -1,40 +1,53 @@
-const nodemailer = require("nodemailer");
-
-let transporter = null;
-let transporterError = null;
+// Railway's Free/Trial/Hobby plans block outbound SMTP entirely (anti-spam
+// measure), so email is sent through Resend's HTTPS API instead of SMTP —
+// this works on every Railway plan since it's a plain HTTPS request.
+// https://docs.railway.com/networking/outbound-networking#email-delivery
 
 function isConfigured() {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-}
-
-function getTransporter() {
-  if (!isConfigured()) return null;
-  if (transporter) return transporter;
-  try {
-    const port = Number(process.env.SMTP_PORT || 587);
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: port,
-      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-    return transporter;
-  } catch (e) {
-    transporterError = e;
-    return null;
-  }
+  return !!process.env.RESEND_API_KEY;
 }
 
 async function sendMail({ to, subject, text, html }) {
   if (!isConfigured()) {
     throw new Error(
-      "Email sending isn't configured yet. Set SMTP_HOST, SMTP_USER, and SMTP_PASS (and optionally SMTP_PORT / SMTP_FROM) in the server's environment variables."
+      "Email sending isn't configured yet. Set RESEND_API_KEY (and optionally MAIL_FROM) in the server's environment variables."
     );
   }
-  const t = getTransporter();
-  if (!t) throw new Error("Couldn't set up the mail server connection: " + (transporterError && transporterError.message));
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  await t.sendMail({ from, to, subject, text, html });
+
+  const from = process.env.MAIL_FROM || "onboarding@resend.dev";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  let res;
+  try {
+    res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + process.env.RESEND_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from, to: [to], subject, text, html }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e.name === "AbortError") {
+      throw new Error("Timed out reaching the email service — try again in a moment.");
+    }
+    throw new Error("Couldn't reach the email service: " + e.message);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const body = await res.json();
+      detail = body && body.message ? body.message : JSON.stringify(body);
+    } catch (e) {
+      detail = res.statusText;
+    }
+    throw new Error("Email service rejected the request: " + detail);
+  }
 }
 
 module.exports = { sendMail, isConfigured };
