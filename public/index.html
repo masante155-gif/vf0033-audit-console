@@ -5,6 +5,7 @@
 <title>VF-0033 Audit Console</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232B6777'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -268,6 +269,13 @@
       <div class="field"><label>Shift 4 Name</label><input type="text" id="shiftName4"></div>
       <div class="field"><label>Shift 4 Supervisor Email</label><input type="text" id="shiftEmail4" placeholder="name@company.com"></div>
     </div>
+    <h3>Email Setup (EmailJS)</h3>
+    <div class="admin-grid">
+      <div class="field"><label>EmailJS Service ID</label><input type="text" id="emailjsServiceId" placeholder="e.g. service_abc1234"></div>
+      <div class="field"><label>EmailJS Template ID</label><input type="text" id="emailjsTemplateId" placeholder="e.g. template_xyz9876"></div>
+      <div class="field"><label>EmailJS Public Key</label><input type="text" id="emailjsPublicKey" placeholder="from Account &rarr; API Keys"></div>
+    </div>
+    <div class="admin-note">These three values come from your EmailJS account (emailjs.com) after you connect your Gmail as an Email Service and create a template. Once set, the "Email Shift Supervisor" button sends straight from your connected Gmail — no server email setup needed.</div>
     <div class="admin-note">Add or remove checklist items with the &ldquo;+ Add item&rdquo; button at the bottom of each section, or the &times; next to a row. The eyebrow label, title, and subtitle at the top are also editable directly while Admin mode is on. This app is now hosted on its own server, so every change here is saved to a real database &mdash; no dependency on Claude's hosting.</div>
   </div>
 
@@ -411,6 +419,9 @@ function renderHeader(){
     setValueIfIdle($("#shiftName" + i), s["shift" + i + "_name"]);
     setValueIfIdle($("#shiftEmail" + i), s["shift" + i + "_email"]);
   }
+  setValueIfIdle($("#emailjsServiceId"), s.emailjs_service_id);
+  setValueIfIdle($("#emailjsTemplateId"), s.emailjs_template_id);
+  setValueIfIdle($("#emailjsPublicKey"), s.emailjs_public_key);
   $("#footerRevDate").textContent = s.revision_date || "—";
 }
 
@@ -469,6 +480,9 @@ function wireHeaderFields(){
       bindAdminField("shiftEmail" + n, "shift" + n + "_email");
     })(i);
   }
+  bindAdminField("emailjsServiceId", "emailjs_service_id");
+  bindAdminField("emailjsTemplateId", "emailjs_template_id");
+  bindAdminField("emailjsPublicKey", "emailjs_public_key");
 }
 
 // ---------------- Checklist ----------------
@@ -653,19 +667,38 @@ async function handleNotify(item, entry, btn){
   if(!slot){ setNotifyHint(entry, "Pick a shift above first.", true); return; }
   var email = STATE.settings["shift" + slot + "_email"];
   if(!email){ setNotifyHint(entry, "No supervisor email on file for that shift — add one in Admin.", true); return; }
+  var s = STATE.settings;
+  if(!s.emailjs_service_id || !s.emailjs_template_id || !s.emailjs_public_key){
+    setNotifyHint(entry, "Email isn't set up yet — add your EmailJS keys in Admin.", true);
+    return;
+  }
+  if(typeof emailjs === "undefined"){
+    setNotifyHint(entry, "Email service didn't load — check your connection and try again.", true);
+    return;
+  }
 
   btn.disabled = true;
   var prevLabel = btn.textContent;
   btn.textContent = "Sending…";
   setNotifyHint(entry, "", false);
   try{
-    var res = await api("/api/items/" + item.id + "/notify", { method: "POST" });
+    var payload = await api("/api/items/" + item.id + "/notify-payload");
+    await emailjs.send(s.emailjs_service_id, s.emailjs_template_id, {
+      to_email: payload.to,
+      subject: payload.subject,
+      message: payload.message,
+      link: payload.link,
+      shift: payload.shift
+    }, { publicKey: s.emailjs_public_key });
+
+    var res = await api("/api/items/" + item.id + "/notify", { method: "POST", body: JSON.stringify({ sentTo: payload.to }) });
     item.notified_at = res.item.notified_at;
     setNotifyHint(entry, notifiedHintText(item), false);
-    toast("Emailed " + res.sentTo + ".");
+    toast("Emailed " + payload.to + ".");
   }catch(e){
-    setNotifyHint(entry, e.message, true);
-    toast("Couldn't send: " + e.message);
+    var msg = (e && e.text) || (e && e.message) || "Couldn't send the email.";
+    setNotifyHint(entry, msg, true);
+    toast("Couldn't send: " + msg);
   }finally{
     btn.disabled = false;
     btn.textContent = prevLabel;

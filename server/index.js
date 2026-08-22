@@ -6,7 +6,6 @@ const multer = require("multer");
 const sharp = require("sharp");
 const { db, bumpRevision, DATA_DIR } = require("./db");
 const { generatePdf } = require("./pdf");
-const { sendMail, isConfigured: mailConfigured } = require("./mailer");
 
 const app = express();
 app.set("trust proxy", true);
@@ -23,6 +22,7 @@ const SETTINGS_ADMIN_FIELDS = [
   "eyebrow", "title", "subtitle", "review_due", "revision_date",
   "shift1_name", "shift1_email", "shift2_name", "shift2_email",
   "shift3_name", "shift3_email", "shift4_name", "shift4_email",
+  "emailjs_service_id", "emailjs_template_id", "emailjs_public_key",
 ];
 const SETTINGS_OPEN_FIELDS = ["auditor", "audit_date", "qa_initials"];
 const SETTINGS_GATED_SIGNOFF_FIELDS = ["reviewed_by", "reviewed_date"];
@@ -145,10 +145,20 @@ function shiftName(settings, slot) {
 }
 
 app.get("/api/mail-status", (req, res) => {
-  res.json({ configured: mailConfigured() });
+  const settings = getSettings();
+  const configured = !!(
+    settings.emailjs_service_id &&
+    settings.emailjs_template_id &&
+    settings.emailjs_public_key
+  );
+  res.json({ configured });
 });
 
-app.post("/api/items/:id/notify", async (req, res) => {
+// The browser sends the actual email via EmailJS (so it goes out from the
+// admin's own connected Gmail, not the server). This endpoint just validates
+// the deviation is in a sendable state and hands back everything the
+// EmailJS template needs.
+app.get("/api/items/:id/notify-payload", (req, res) => {
   const id = Number(req.params.id);
   const item = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
   if (!item) return res.status(404).json({ error: "Item not found." });
@@ -164,7 +174,7 @@ app.post("/api/items/:id/notify", async (req, res) => {
   const link = baseUrl(req) + "/?nc=" + id;
   const shift = shiftName(settings, item.shift);
   const subject = "GMP Deviation #" + id + " needs your acknowledgment — " + (settings.title || "Floor Audit Console");
-  const text =
+  const message =
     "A Non-Conformance was logged on the " + (settings.title || "Floor Audit Console") + " and needs " + shift + " Supervisor acknowledgment.\n\n" +
     "Item #" + id + " — " + item.section + "\n" +
     "Audit date: " + (settings.audit_date || "(unspecified)") + "\n" +
@@ -175,34 +185,22 @@ app.post("/api/items/:id/notify", async (req, res) => {
     "Please open the link below, review the deviation, and enter your initials to acknowledge it. " +
     "SQF sign-off is locked until this is acknowledged.\n\n" +
     link;
-  const html =
-    "<p>A Non-Conformance was logged on the <b>" + escapeHtml(settings.title || "Floor Audit Console") + "</b> and needs <b>" + escapeHtml(shift) + " Supervisor</b> acknowledgment.</p>" +
-    "<p><b>Item #" + id + " — " + escapeHtml(item.section) + "</b><br>" +
-    "Audit date: " + escapeHtml(settings.audit_date || "(unspecified)") + "<br>" +
-    "Auditor: " + escapeHtml(settings.auditor || "(unspecified)") + "</p>" +
-    "<p><b>Description:</b> " + escapeHtml(item.description || item.text) + "<br>" +
-    "<b>Corrective action taken:</b> " + escapeHtml(item.corrective_action || "(not yet entered)") + "<br>" +
-    "<b>Preventive measures:</b> " + escapeHtml(item.preventive_measures || "(not yet entered)") + "</p>" +
-    "<p>Please open the link below, review the deviation, and enter your initials to acknowledge it. SQF sign-off is locked until this is acknowledged.</p>" +
-    '<p><a href="' + link + '">' + link + "</a></p>";
 
-  try {
-    await sendMail({ to: email, subject, text, html });
-  } catch (e) {
-    return res.status(502).json({ error: e.message });
-  }
+  res.json({ ok: true, to: email, subject, message, link, shift, itemId: id });
+});
 
+// Called after the browser confirms EmailJS actually sent the message.
+app.post("/api/items/:id/notify", (req, res) => {
+  const id = Number(req.params.id);
+  const item = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
+  if (!item) return res.status(404).json({ error: "Item not found." });
+
+  const sentTo = req.body && req.body.sentTo ? String(req.body.sentTo) : null;
   const now = new Date().toISOString();
   db.prepare("UPDATE items SET notified_at = ? WHERE id = ?").run(now, id);
   bumpRevision();
-  res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id), sentTo: email });
+  res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id), sentTo });
 });
-
-function escapeHtml(s) {
-  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-  ));
-}
 
 app.post("/api/items/:id/clear", (req, res) => {
   const id = Number(req.params.id);
