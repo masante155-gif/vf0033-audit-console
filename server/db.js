@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS settings (
   qa_initials TEXT NOT NULL DEFAULT '',
   reviewed_by TEXT NOT NULL DEFAULT '',
   reviewed_date TEXT NOT NULL DEFAULT '',
+  signoff_confirmed_at TEXT NOT NULL DEFAULT '',
   review_due TEXT NOT NULL DEFAULT '',
   revision_date TEXT NOT NULL DEFAULT '02/06/2026',
   passcode TEXT NOT NULL DEFAULT 'GMP2026',
@@ -127,6 +128,7 @@ const settingsColumns = db.prepare("PRAGMA table_info(settings)").all().map((c) 
 for (const col of [
   "emailjs_service_id", "emailjs_template_id", "emailjs_public_key",
   "shift1_lead_email", "shift2_lead_email", "shift3_lead_email", "shift4_lead_email",
+  "signoff_confirmed_at",
 ]) {
   if (!settingsColumns.includes(col)) {
     db.exec("ALTER TABLE settings ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''");

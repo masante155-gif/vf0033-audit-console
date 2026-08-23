@@ -233,6 +233,37 @@ app.post("/api/settings", (req, res) => {
   res.json({ ok: true, settings: getSettings() });
 });
 
+// Explicit "Confirm Sign-Off" action for the live (not-yet-archived) audit —
+// distinct from the auto-save on the Reviewed By / Date fields. Typing
+// saves the draft; this is the deliberate act that stamps a server-side
+// timestamp, mirroring "filling in your name" vs. "signing" on paper. The
+// timestamp is cleared by /api/reset (new audit cycle) and by the "Edit"
+// unconfirm action below (fixing a typo un-signs it until re-confirmed).
+app.post("/api/settings/confirm-signoff", (req, res) => {
+  if (!gateOpen()) {
+    return res.status(409).json({ error: "Sign-off is locked until every open deviation is acknowledged." });
+  }
+  const body = req.body || {};
+  const settings = getSettings();
+  const reviewedBy = body.reviewed_by != null ? String(body.reviewed_by).trim() : (settings.reviewed_by || "");
+  const reviewedDate = body.reviewed_date != null ? String(body.reviewed_date).trim() : (settings.reviewed_date || "");
+  if (!reviewedBy || !reviewedDate) {
+    return res.status(400).json({ error: "Enter both a reviewer name and a date before confirming sign-off." });
+  }
+  const confirmedAt = new Date().toISOString();
+  db.prepare("UPDATE settings SET reviewed_by = ?, reviewed_date = ?, signoff_confirmed_at = ? WHERE id = 1").run(
+    reviewedBy, reviewedDate, confirmedAt
+  );
+  bumpRevision();
+  res.json({ ok: true, settings: getSettings() });
+});
+
+app.post("/api/settings/unconfirm-signoff", (req, res) => {
+  db.prepare("UPDATE settings SET signoff_confirmed_at = '' WHERE id = 1").run();
+  bumpRevision();
+  res.json({ ok: true, settings: getSettings() });
+});
+
 app.post("/api/items/:id/status", (req, res) => {
   const id = Number(req.params.id);
   const status = req.body.status;
@@ -457,7 +488,7 @@ app.post("/api/reset", (req, res) => {
     "UPDATE items SET status='', description='', corrective_action='', preventive_measures='', initials='', shift=NULL, photo_filename=NULL, notified_at=NULL"
   ).run();
   db.prepare(
-    "UPDATE settings SET auditor='', audit_date='', qa_initials='', reviewed_by='', reviewed_date='' WHERE id = 1"
+    "UPDATE settings SET auditor='', audit_date='', qa_initials='', reviewed_by='', reviewed_date='', signoff_confirmed_at='' WHERE id = 1"
   ).run();
   bumpRevision();
   res.json({ ok: true, archived: snapshotId !== null });
