@@ -1,3 +1,4 @@
+const fs = require("fs");
 const PDFDocument = require("pdfkit");
 
 // Brand palette — matches the app's own CSS custom properties (public/index.html)
@@ -346,7 +347,14 @@ function drawRecurringIssues(doc, x, y, w, issues) {
   return doc.y;
 }
 
-function generatePdf(res, { settings, items, history }) {
+function formatArchivedAt(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function generatePdf(res, { settings, items, history, archiveInfo }) {
   const snapshots = (history && history.snapshots) || [];
   const recurringIssues = (history && history.recurringIssues) || [];
   const doc = new PDFDocument({ size: "LETTER", margin: MARGIN });
@@ -395,6 +403,31 @@ function generatePdf(res, { settings, items, history }) {
   doc.y = detailsY + 32;
   doc.moveTo(MARGIN, doc.y).lineTo(PAGE_W - MARGIN, doc.y).lineWidth(0.8).stroke(C.line);
   doc.y += 14;
+
+  // ---- Archived-record banner — only present when this PDF was pulled
+  // back out of history rather than generated from the live checklist.
+  if (archiveInfo) {
+    const bannerH = 26;
+    const bannerY = doc.y;
+    doc.roundedRect(MARGIN, bannerY, CONTENT_W, bannerH, 4).fill(C.accentTint);
+    doc.font("Helvetica-Bold").fontSize(8.6).fillColor(C.accentStrong).text(
+      "ARCHIVED RECORD", MARGIN + 12, bannerY + 6, { characterSpacing: 0.3, lineBreak: false }
+    );
+    doc.font("Helvetica").fontSize(8.3).fillColor(C.inkMuted).text(
+      "Pulled from history · archived " + formatArchivedAt(archiveInfo.archivedAt),
+      MARGIN + 118, bannerY + 6.5, { width: CONTENT_W - 260, lineBreak: false }
+    );
+    let badgeText = "Integrity not checkable";
+    let badgeColor = C.inkFaint;
+    let badgeTint = C.surface2;
+    if (archiveInfo.verified === true) { badgeText = "Verified unaltered"; badgeColor = C.ok; badgeTint = C.okTint; }
+    else if (archiveInfo.verified === false) { badgeText = "Does not match original fingerprint"; badgeColor = C.bad; badgeTint = C.badTint; }
+    doc.font("Helvetica-Bold").fontSize(7.8).fillColor(badgeColor);
+    const badgeW = doc.widthOfString(badgeText) + 16;
+    doc.roundedRect(MARGIN + CONTENT_W - badgeW - 10, bannerY + 5, badgeW, 16, 8).fill(badgeTint);
+    doc.fillColor(badgeColor).text(badgeText, MARGIN + CONTENT_W - badgeW - 10, bannerY + 9, { width: badgeW, align: "center", lineBreak: false });
+    doc.y = bannerY + bannerH + 12;
+  }
 
   // ---- Overview stat cards -------------------------------------------------
   doc.y = sectionHeading(doc, "Overview", doc.y);
@@ -458,7 +491,25 @@ function generatePdf(res, { settings, items, history }) {
     const shiftH = doc.heightOfString(shiftText, { width: cw });
     const headerH = 16;
     const fieldGap = 2;
-    const boxH = headerH + descH + fieldGap + caH + fieldGap + pmH + fieldGap + shiftH + 4;
+
+    // Photo evidence, if this deviation has one attached — sized to fit
+    // within a modest box inside the card rather than at full resolution.
+    let photoImg = null, photoW = 0, photoH = 0, photoLabelH = 0;
+    if (item.photo_path && fs.existsSync(item.photo_path)) {
+      try {
+        photoImg = doc.openImage(item.photo_path);
+        const maxW = 200, maxH = 150;
+        const scale = Math.min(maxW / photoImg.width, maxH / photoImg.height, 1);
+        photoW = Math.round(photoImg.width * scale);
+        photoH = Math.round(photoImg.height * scale);
+        doc.font("Helvetica-Bold").fontSize(7.6);
+        photoLabelH = doc.heightOfString("PHOTO EVIDENCE", { width: cw });
+      } catch (e) {
+        photoImg = null; // unreadable/missing file on disk — skip silently, text fields still render
+      }
+    }
+    const photoBlockH = photoImg ? fieldGap + photoLabelH + 3 + photoH : 0;
+    const boxH = headerH + descH + fieldGap + caH + fieldGap + pmH + fieldGap + shiftH + photoBlockH + 4;
 
     ensureSpace(doc, boxH + 10);
     const boxY = doc.y;
@@ -483,6 +534,16 @@ function generatePdf(res, { settings, items, history }) {
     doc.text(pmText, cx, ly, { width: cw });
     ly = doc.y + fieldGap;
     doc.font("Helvetica-Bold").fontSize(9).fillColor(C.ink).text(shiftText, cx, ly, { width: cw });
+
+    if (photoImg) {
+      ly = doc.y + fieldGap;
+      doc.font("Helvetica-Bold").fontSize(7.6).fillColor(C.inkFaint).text(
+        "PHOTO EVIDENCE", cx, ly, { width: cw, characterSpacing: 0.3, lineBreak: false }
+      );
+      const imgY = doc.y + 3;
+      doc.image(photoImg, cx, imgY, { width: photoW, height: photoH });
+      doc.y = imgY + photoH;
+    }
 
     doc.y = boxY + boxH + 10;
   });

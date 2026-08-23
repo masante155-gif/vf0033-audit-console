@@ -45,11 +45,43 @@ function gateOpen() {
   return openItems.every((i) => i.initials && i.initials.trim().length > 0);
 }
 
+// Canonical shape used to fingerprint a snapshot's findings, shared between
+// archive time (hash it once, up front) and verify time (recompute from
+// whatever's in the DB now and compare). Deliberately excludes reviewed_by/
+// reviewed_date/content_hash itself — sign-off is expected to be added or
+// corrected later and must not appear to "break" the fingerprint.
+function computeSnapshotHash(core, items) {
+  const payload = JSON.stringify({
+    snapshot: {
+      audit_date: core.audit_date || "",
+      auditor: core.auditor || "",
+      qa_initials: core.qa_initials || "",
+      archived_at: core.archived_at,
+      total: core.total,
+      accepted: core.accepted,
+      unacceptable: core.unacceptable,
+    },
+    items: items.map((it) => ({
+      item_id: it.item_id != null ? it.item_id : it.id,
+      section: it.section,
+      item_text: it.item_text != null ? it.item_text : it.text,
+      status: it.status || "",
+      description: it.description || "",
+      corrective_action: it.corrective_action || "",
+      preventive_measures: it.preventive_measures || "",
+      shift: it.shift == null ? null : it.shift,
+      initials: it.initials || "",
+    })),
+  });
+  return crypto.createHash("sha256").update(payload).digest("hex");
+}
+
 // Freezes the current live checklist into audit_snapshots/audit_snapshot_items
-// so pass rates and recurring issues can be trended across audits. Called
-// from /api/reset right before it wipes the log for the next audit. Skips
-// archiving if nothing was actually reviewed yet (an accidental/empty reset
-// shouldn't leave a hollow entry in the history).
+// so pass rates, recurring issues, and full past reports can be reviewed
+// later instead of being lost on every reset. Called from /api/reset right
+// before it wipes the log for the next audit. Skips archiving if nothing
+// was actually reviewed yet (an accidental/empty reset shouldn't leave a
+// hollow entry in the history).
 const archiveCurrentAudit = db.transaction(() => {
   const settings = getSettings();
   const items = getItems();
@@ -57,35 +89,72 @@ const archiveCurrentAudit = db.transaction(() => {
   const unacceptable = items.filter((i) => i.status === "U").length;
   if (accepted + unacceptable === 0) return null;
 
+  const archivedAt = new Date().toISOString();
+  const core = {
+    audit_date: settings.audit_date || "",
+    auditor: settings.auditor || "",
+    qa_initials: settings.qa_initials || "",
+    archived_at: archivedAt,
+    total: items.length,
+    accepted,
+    unacceptable,
+  };
+  const contentHash = computeSnapshotHash(core, items);
+
   const info = db
     .prepare(
-      "INSERT INTO audit_snapshots (audit_date, auditor, reviewed_by, reviewed_date, total, accepted, unacceptable) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      `INSERT INTO audit_snapshots
+         (audit_date, auditor, qa_initials, reviewed_by, reviewed_date, archived_at, total, accepted, unacceptable, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(settings.audit_date || "", settings.auditor || "", settings.reviewed_by || "", settings.reviewed_date || "", items.length, accepted, unacceptable);
+    .run(
+      core.audit_date, core.auditor, core.qa_initials,
+      settings.reviewed_by || "", settings.reviewed_date || "",
+      archivedAt, core.total, core.accepted, core.unacceptable, contentHash
+    );
 
   const insertItem = db.prepare(
-    "INSERT INTO audit_snapshot_items (snapshot_id, item_id, section, item_text, status, shift, initials) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    `INSERT INTO audit_snapshot_items
+       (snapshot_id, item_id, section, item_text, status, description, corrective_action, preventive_measures, shift, initials, photo_filename)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   for (const item of items) {
-    insertItem.run(info.lastInsertRowid, item.id, item.section, item.text, item.status || "", item.shift, item.initials || "");
+    insertItem.run(
+      info.lastInsertRowid, item.id, item.section, item.text, item.status || "",
+      item.description || "", item.corrective_action || "", item.preventive_measures || "",
+      item.shift, item.initials || "", item.photo_filename || null
+    );
   }
   return info.lastInsertRowid;
 });
 
-function getAuditSnapshots(limit) {
-  return db.prepare("SELECT * FROM audit_snapshots ORDER BY id DESC LIMIT ?").all(limit).reverse();
+function getSnapshot(id) {
+  return db.prepare("SELECT * FROM audit_snapshots WHERE id = ?").get(id);
 }
-function getRecurringIssues(limit) {
-  return db
-    .prepare(
-      `SELECT section, item_text, COUNT(*) AS times_flagged
-       FROM audit_snapshot_items
-       WHERE status = 'U'
-       GROUP BY section, item_text
-       ORDER BY times_flagged DESC, item_text ASC
-       LIMIT ?`
-    )
-    .all(limit);
+function getSnapshotItems(id) {
+  return db.prepare("SELECT * FROM audit_snapshot_items WHERE snapshot_id = ? ORDER BY id ASC").all(id);
+}
+function verifySnapshot(snapshot, items) {
+  if (!snapshot.content_hash) return null; // archived before hashing existed — nothing to check against
+  return computeSnapshotHash(snapshot, items) === snapshot.content_hash;
+}
+function getAuditSnapshots(limit, uptoId) {
+  const rows = uptoId
+    ? db.prepare("SELECT * FROM audit_snapshots WHERE id <= ? ORDER BY id DESC LIMIT ?").all(uptoId, limit)
+    : db.prepare("SELECT * FROM audit_snapshots ORDER BY id DESC LIMIT ?").all(limit);
+  return rows.reverse();
+}
+function getRecurringIssues(limit, uptoId) {
+  const clause = uptoId ? "WHERE status = 'U' AND snapshot_id <= ?" : "WHERE status = 'U'";
+  const stmt = db.prepare(
+    `SELECT section, item_text, COUNT(*) AS times_flagged
+     FROM audit_snapshot_items
+     ${clause}
+     GROUP BY section, item_text
+     ORDER BY times_flagged DESC, item_text ASC
+     LIMIT ?`
+  );
+  return uptoId ? stmt.all(uptoId, limit) : stmt.all(limit);
 }
 function checkAdmin(req) {
   const provided = req.headers["x-admin-passcode"] || "";
@@ -377,15 +446,13 @@ app.delete("/api/items/:id/photo", (req, res) => {
 });
 
 app.post("/api/reset", (req, res) => {
+  // Photos are archived by reference (audit_snapshot_items.photo_filename)
+  // as part of archiveCurrentAudit(), so the underlying files must survive
+  // this reset — clearing them here would silently blank out the photo
+  // evidence in every past PDF. Only the live items table's pointer to the
+  // file is cleared; the file itself stays in DATA_DIR/uploads.
   const snapshotId = archiveCurrentAudit();
 
-  const items = db.prepare("SELECT id, photo_filename FROM items").all();
-  for (const item of items) {
-    if (item.photo_filename) {
-      const p = path.join(DATA_DIR, "uploads", item.photo_filename);
-      fs.existsSync(p) && fs.unlinkSync(p);
-    }
-  }
   db.prepare(
     "UPDATE items SET status='', description='', corrective_action='', preventive_measures='', initials='', shift=NULL, photo_filename=NULL, notified_at=NULL"
   ).run();
@@ -396,12 +463,115 @@ app.post("/api/reset", (req, res) => {
   res.json({ ok: true, archived: snapshotId !== null });
 });
 
+function withPhotoPath(item) {
+  return Object.assign({}, item, {
+    photo_path: item.photo_filename ? path.join(DATA_DIR, "uploads", item.photo_filename) : null,
+  });
+}
+
 app.get("/api/pdf", (req, res) => {
   const history = {
     snapshots: getAuditSnapshots(10),
     recurringIssues: getRecurringIssues(8),
   };
-  generatePdf(res, { settings: getSettings(), items: getItems(), history });
+  generatePdf(res, { settings: getSettings(), items: getItems().map(withPhotoPath), history });
+});
+
+function logAmendment(snapshotId, field, oldValue, newValue, changedBy) {
+  db.prepare(
+    "INSERT INTO audit_snapshot_amendments (snapshot_id, field, old_value, new_value, changed_by) VALUES (?, ?, ?, ?, ?)"
+  ).run(snapshotId, field, oldValue || "", newValue || "", changedBy || "");
+}
+function snapshotSummary(row) {
+  const items = getSnapshotItems(row.id);
+  return {
+    id: row.id,
+    audit_date: row.audit_date,
+    auditor: row.auditor,
+    qa_initials: row.qa_initials,
+    reviewed_by: row.reviewed_by,
+    reviewed_date: row.reviewed_date,
+    archived_at: row.archived_at,
+    total: row.total,
+    accepted: row.accepted,
+    unacceptable: row.unacceptable,
+    signedOff: !!(row.reviewed_by && row.reviewed_by.trim() && row.reviewed_date && row.reviewed_date.trim()),
+    verified: verifySnapshot(row, items),
+  };
+}
+
+// ---- Audit history: browse, re-download, and sign off past audits --------
+app.get("/api/history", (req, res) => {
+  const rows = db.prepare("SELECT * FROM audit_snapshots ORDER BY id DESC").all();
+  res.json({ history: rows.map(snapshotSummary) });
+});
+
+app.get("/api/history/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const row = getSnapshot(id);
+  if (!row) return res.status(404).json({ error: "Archived audit not found." });
+  const items = getSnapshotItems(id);
+  const amendments = db.prepare("SELECT * FROM audit_snapshot_amendments WHERE snapshot_id = ? ORDER BY id ASC").all(id);
+  res.json({ ...snapshotSummary(row), items, amendments });
+});
+
+app.get("/api/history/:id/pdf", (req, res) => {
+  const id = Number(req.params.id);
+  const snapshot = getSnapshot(id);
+  if (!snapshot) return res.status(404).json({ error: "Archived audit not found." });
+  const snapshotItems = getSnapshotItems(id);
+  const verified = verifySnapshot(snapshot, snapshotItems);
+
+  const items = snapshotItems.map((it) => withPhotoPath({
+    id: it.item_id,
+    section: it.section,
+    text: it.item_text,
+    status: it.status,
+    description: it.description,
+    corrective_action: it.corrective_action,
+    preventive_measures: it.preventive_measures,
+    shift: it.shift,
+    initials: it.initials,
+    photo_filename: it.photo_filename,
+  }));
+  const settings = Object.assign({}, getSettings(), {
+    auditor: snapshot.auditor,
+    audit_date: snapshot.audit_date,
+    qa_initials: snapshot.qa_initials,
+    reviewed_by: snapshot.reviewed_by,
+    reviewed_date: snapshot.reviewed_date,
+  });
+  const history = {
+    snapshots: getAuditSnapshots(10, id),
+    recurringIssues: getRecurringIssues(8, id),
+  };
+  const archiveInfo = { archivedAt: snapshot.archived_at, verified };
+  generatePdf(res, { settings, items, history, archiveInfo });
+});
+
+app.post("/api/history/:id/signoff", (req, res) => {
+  const id = Number(req.params.id);
+  const snapshot = getSnapshot(id);
+  if (!snapshot) return res.status(404).json({ error: "Archived audit not found." });
+
+  const reviewedBy = String((req.body || {}).reviewed_by || "").trim();
+  const reviewedDate = String((req.body || {}).reviewed_date || "").trim();
+  if (!reviewedBy || !reviewedDate) {
+    return res.status(400).json({ error: "Enter both a reviewer name and a date to sign off." });
+  }
+
+  const alreadySigned = !!(snapshot.reviewed_by && snapshot.reviewed_by.trim() && snapshot.reviewed_date && snapshot.reviewed_date.trim());
+  if (alreadySigned) {
+    if (!checkAdmin(req)) {
+      return res.status(403).json({ error: "This audit is already signed off. Admin passcode required to correct it." });
+    }
+    const changedBy = String((req.body || {}).changed_by || "").trim() || "admin";
+    if (reviewedBy !== snapshot.reviewed_by) logAmendment(id, "reviewed_by", snapshot.reviewed_by, reviewedBy, changedBy);
+    if (reviewedDate !== snapshot.reviewed_date) logAmendment(id, "reviewed_date", snapshot.reviewed_date, reviewedDate, changedBy);
+  }
+
+  db.prepare("UPDATE audit_snapshots SET reviewed_by = ?, reviewed_date = ? WHERE id = ?").run(reviewedBy, reviewedDate, id);
+  res.json({ ok: true, amended: alreadySigned, snapshot: snapshotSummary(getSnapshot(id)) });
 });
 
 app.use("/uploads", express.static(path.join(DATA_DIR, "uploads"), { maxAge: "30d" }));

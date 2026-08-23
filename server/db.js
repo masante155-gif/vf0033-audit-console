@@ -71,12 +71,14 @@ CREATE TABLE IF NOT EXISTS audit_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   audit_date TEXT NOT NULL DEFAULT '',
   auditor TEXT NOT NULL DEFAULT '',
+  qa_initials TEXT NOT NULL DEFAULT '',
   reviewed_by TEXT NOT NULL DEFAULT '',
   reviewed_date TEXT NOT NULL DEFAULT '',
   archived_at TEXT NOT NULL DEFAULT (datetime('now')),
   total INTEGER NOT NULL DEFAULT 0,
   accepted INTEGER NOT NULL DEFAULT 0,
-  unacceptable INTEGER NOT NULL DEFAULT 0
+  unacceptable INTEGER NOT NULL DEFAULT 0,
+  content_hash TEXT NOT NULL DEFAULT ''
 );
 
 -- Frozen copy of every checklist item's result at the moment an audit was
@@ -89,11 +91,29 @@ CREATE TABLE IF NOT EXISTS audit_snapshot_items (
   section TEXT NOT NULL,
   item_text TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  corrective_action TEXT NOT NULL DEFAULT '',
+  preventive_measures TEXT NOT NULL DEFAULT '',
   shift INTEGER,
-  initials TEXT NOT NULL DEFAULT ''
+  initials TEXT NOT NULL DEFAULT '',
+  photo_filename TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_snapshot_items_snapshot ON audit_snapshot_items(snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_snapshot_items_status ON audit_snapshot_items(status);
+
+-- Append-only correction trail. A sign-off, once recorded, is never
+-- silently overwritten — changing one logs the before/after here instead,
+-- so the history stays honest even when a mistake needs fixing later.
+CREATE TABLE IF NOT EXISTS audit_snapshot_amendments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  snapshot_id INTEGER NOT NULL REFERENCES audit_snapshots(id),
+  field TEXT NOT NULL,
+  old_value TEXT NOT NULL DEFAULT '',
+  new_value TEXT NOT NULL DEFAULT '',
+  changed_by TEXT NOT NULL DEFAULT '',
+  changed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_snapshot_amendments_snapshot ON audit_snapshot_amendments(snapshot_id);
 `);
 
 // Migration: add notified_at to items created before this column existed.
@@ -111,6 +131,25 @@ for (const col of [
   if (!settingsColumns.includes(col)) {
     db.exec("ALTER TABLE settings ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''");
   }
+}
+
+// Migration: widen audit_snapshots/audit_snapshot_items for deployments that
+// already created these tables before qa_initials/content_hash/NC-detail
+// columns were added.
+const snapshotColumns = db.prepare("PRAGMA table_info(audit_snapshots)").all().map((c) => c.name);
+for (const col of ["qa_initials", "content_hash"]) {
+  if (!snapshotColumns.includes(col)) {
+    db.exec("ALTER TABLE audit_snapshots ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''");
+  }
+}
+const snapshotItemColumns = db.prepare("PRAGMA table_info(audit_snapshot_items)").all().map((c) => c.name);
+for (const col of ["description", "corrective_action", "preventive_measures"]) {
+  if (!snapshotItemColumns.includes(col)) {
+    db.exec("ALTER TABLE audit_snapshot_items ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''");
+  }
+}
+if (!snapshotItemColumns.includes("photo_filename")) {
+  db.exec("ALTER TABLE audit_snapshot_items ADD COLUMN photo_filename TEXT");
 }
 
 const settingsRow = db.prepare("SELECT id FROM settings WHERE id = 1").get();
