@@ -196,9 +196,15 @@
   .signoff-gate{font-size:11.5px; border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px;}
   .signoff-gate.locked{background:var(--warn-tint); color:var(--warn); border:1px solid var(--warn-line);}
   .signoff-gate.open{background:var(--ok-tint); color:var(--ok); border:1px solid var(--ok-line);}
-  .signoff-fields{display:flex; gap:14px; flex-wrap:wrap;}
+  .signoff-fields{display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;}
   .signoff-card.locked .signoff-fields{pointer-events:none; opacity:.5;}
   .signoff-fields .field input{min-width:140px;}
+  .signoff-confirm-field{display:flex;}
+  .signoff-confirmed{display:none; align-items:center; gap:10px; flex-wrap:wrap; background:var(--ok-tint); color:var(--ok); border:1px solid var(--ok-line); border-radius:var(--radius-sm); padding:9px 12px; font-size:12.5px; font-weight:600;}
+  .signoff-confirmed-icon{display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:999px; background:var(--ok); color:#fff; font-size:11px; flex:none;}
+  .signoff-confirmed .btn{font-weight:600; padding:5px 10px; font-size:11.5px;}
+  .signoff-card.confirmed .signoff-fields{display:none;}
+  .signoff-card.confirmed .signoff-confirmed{display:flex;}
 
   .history-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); margin-top:22px; overflow:hidden;}
   .history-head{padding:14px 16px 10px; border-bottom:1px solid var(--line);}
@@ -332,10 +338,16 @@
       <div class="signoff-card" id="signoffCard">
         <h3>SQF Sign-Off</h3>
         <div class="signoff-gate locked" id="signoffGate">All open deviations must be acknowledged by their Shift Supervisor first.</div>
-        <div class="signoff-fields">
+        <div class="signoff-fields" id="signoffFields">
           <div class="field"><label for="qaInitials">QA Lead / Tech Initials</label><input id="qaInitials" type="text" placeholder="Initials"></div>
           <div class="field"><label for="reviewedBy">Reviewed By (SQF Practitioner)</label><input id="reviewedBy" type="text" placeholder="Name"></div>
           <div class="field"><label for="reviewedDate">Date</label><input id="reviewedDate" type="text" placeholder="MM/DD/YYYY"></div>
+          <div class="field signoff-confirm-field"><label>&nbsp;</label><button class="btn" id="confirmSignoffBtn" type="button">Confirm Sign-Off</button></div>
+        </div>
+        <div class="signoff-confirmed" id="signoffConfirmed">
+          <span class="signoff-confirmed-icon" aria-hidden="true">&#10003;</span>
+          <span id="signoffConfirmedText">Signed.</span>
+          <button class="btn ghost" id="editSignoffBtn" type="button">Edit</button>
         </div>
       </div>
     </aside>
@@ -365,6 +377,7 @@ var STATE = null;
 var adminPasscode = null;
 try{ adminPasscode = sessionStorage.getItem("adminPasscode") || null; }catch(e){}
 var saveTimers = {};
+var pendingSaveFns = {};
 var armedDeletes = {};
 
 function $(sel, root){ return (root||document).querySelector(sel); }
@@ -394,7 +407,27 @@ function objWith(key, val){ var o = {}; o[key] = val; return o; }
 
 function debounceSave(key, fn){
   if(saveTimers[key]) clearTimeout(saveTimers[key]);
-  saveTimers[key] = setTimeout(function(){ delete saveTimers[key]; fn(); }, 600);
+  pendingSaveFns[key] = fn;
+  saveTimers[key] = setTimeout(function(){ delete saveTimers[key]; delete pendingSaveFns[key]; fn(); }, 600);
+}
+
+// Every field on the page auto-saves 600ms after you stop typing. That's
+// invisible almost all the time, but "New Audit" archives whatever is in
+// the database *right now* — so anything still mid-debounce (a sign-off
+// name typed a beat ago, a corrective action just finished) needs to be
+// flushed and confirmed saved first, or the archived record could miss it.
+function flushPendingSaves(){
+  var keys = Object.keys(saveTimers);
+  var waits = keys.map(function(key){
+    clearTimeout(saveTimers[key]);
+    delete saveTimers[key];
+    var fn = pendingSaveFns[key];
+    delete pendingSaveFns[key];
+    var result;
+    try{ result = fn && fn(); }catch(e){ result = null; }
+    return (result && typeof result.then === "function") ? result : Promise.resolve();
+  });
+  return Promise.all(waits);
 }
 
 async function api(path, opts){
@@ -435,6 +468,7 @@ async function loadState(){
   renderNc();
   renderSummary();
   renderGate();
+  renderSignoffConfirm();
   hideConnChip();
 }
 
@@ -480,7 +514,7 @@ function bindOpenField(elId, key){
   $("#" + elId).addEventListener("input", function(){
     STATE.settings[key] = this.value;
     debounceSave("settings-" + key, function(){
-      api("/api/settings", { method: "POST", body: JSON.stringify(objWith(key, STATE.settings[key])) })
+      return api("/api/settings", { method: "POST", body: JSON.stringify(objWith(key, STATE.settings[key])) })
         .catch(function(e){ toast("Couldn't save: " + e.message); });
     });
   });
@@ -489,7 +523,7 @@ function bindGatedField(elId, key){
   $("#" + elId).addEventListener("input", function(){
     STATE.settings[key] = this.value;
     debounceSave("settings-" + key, function(){
-      api("/api/settings", { method: "POST", body: JSON.stringify(objWith(key, STATE.settings[key])) })
+      return api("/api/settings", { method: "POST", body: JSON.stringify(objWith(key, STATE.settings[key])) })
         .catch(function(e){ toast(e.message); loadState(); });
     });
   });
@@ -499,7 +533,7 @@ function bindAdminField(elId, key, onSaved){
     STATE.settings[key] = this.value;
     if(onSaved) onSaved(this.value);
     debounceSave("settings-" + key, function(){
-      api("/api/settings", { method: "POST", body: JSON.stringify(objWith(key, STATE.settings[key])) })
+      return api("/api/settings", { method: "POST", body: JSON.stringify(objWith(key, STATE.settings[key])) })
         .catch(function(e){ toast("Couldn't save (is Admin unlocked?): " + e.message); loadState(); });
     });
   });
@@ -561,7 +595,7 @@ function buildDepartmentsTable(){
 
     function saveDept(){
       debounceSave("dept-" + ref.section, function(){
-        api("/api/departments", { method: "POST", body: JSON.stringify({
+        return api("/api/departments", { method: "POST", body: JSON.stringify({
           section: ref.section,
           head_email: emailInput.value,
           is_production_line: checkbox.checked
@@ -612,7 +646,7 @@ function buildItemRow(item){
   textInput.addEventListener("input", function(){
     item.text = textInput.value;
     debounceSave("item-text-" + item.id, function(){
-      api("/api/items/" + item.id, { method: "PUT", body: JSON.stringify({ text: item.text }) })
+      return api("/api/items/" + item.id, { method: "PUT", body: JSON.stringify({ text: item.text }) })
         .catch(function(e){ toast("Couldn't save item wording: " + e.message); });
     });
   });
@@ -922,7 +956,7 @@ function fieldBlock(entry, item, labelHtml, cls, placeholder, apiKey){
     if(apiKey === "initials"){ updateAckBadge(entry, input.value); renderGate(); }
     debounceSave("nc-" + apiKey + "-" + item.id, function(){
       var body = {}; body[apiKey] = item[apiKey];
-      api("/api/items/" + item.id + "/nc", { method: "POST", body: JSON.stringify(body) })
+      return api("/api/items/" + item.id + "/nc", { method: "POST", body: JSON.stringify(body) })
         .catch(function(e){ toast("Couldn't save: " + e.message); });
     });
   });
@@ -1081,6 +1115,45 @@ function renderGate(){
   }
 }
 
+// Reflects whether the CURRENT (not-yet-archived) audit's sign-off has been
+// explicitly confirmed. Typing in Reviewed By / Date still auto-saves as a
+// draft; only clicking "Confirm Sign-Off" (or the History card's own
+// sign-off, for a past audit) counts as actually signed.
+function renderSignoffConfirm(){
+  var card = $("#signoffCard");
+  var confirmedAt = STATE.settings.signoff_confirmed_at;
+  if(confirmedAt){
+    card.classList.add("confirmed");
+    var who = STATE.settings.reviewed_by || "—";
+    var when = STATE.settings.reviewed_date || "—";
+    $("#signoffConfirmedText").textContent = "Signed by " + who + " on " + when + ".";
+  } else {
+    card.classList.remove("confirmed");
+  }
+}
+
+function wireSignoffConfirm(){
+  $("#confirmSignoffBtn").addEventListener("click", async function(){
+    var by = $("#reviewedBy").value.trim();
+    var date = $("#reviewedDate").value.trim();
+    if(!by || !date){ toast("Enter both a reviewer name and a date before confirming sign-off."); return; }
+    try{
+      await flushPendingSaves();
+      var res = await api("/api/settings/confirm-signoff", { method: "POST", body: JSON.stringify({ reviewed_by: by, reviewed_date: date }) });
+      STATE.settings = res.settings;
+      renderSignoffConfirm();
+      toast("Sign-off confirmed.");
+    }catch(e){ toast("Couldn't confirm sign-off: " + e.message); }
+  });
+  $("#editSignoffBtn").addEventListener("click", async function(){
+    try{
+      var res = await api("/api/settings/unconfirm-signoff", { method: "POST" });
+      STATE.settings = res.settings;
+      renderSignoffConfirm();
+    }catch(e){ toast("Couldn't unlock sign-off: " + e.message); }
+  });
+}
+
 // ---------------- Admin ----------------
 function wireAdmin(){
   var toggleBtn = $("#adminToggleBtn"), prompt = $("#adminPrompt"), err = $("#adminErr"), attempt = $("#passcodeAttempt");
@@ -1151,12 +1224,21 @@ function wireReset(){
   var armed = false, timer = null;
   btn.addEventListener("click", async function(){
     if(!armed){
-      armed = true; btn.textContent = "Confirm reset?"; btn.classList.add("danger-arm");
-      timer = setTimeout(function(){ armed = false; btn.textContent = "New Audit"; btn.classList.remove("danger-arm"); }, 3000);
+      // A soft nudge, not a block — an audit with reviewed items but no
+      // confirmed sign-off can still be archived (and signed later from
+      // Audit History), but the button should say so before it happens.
+      var reviewedAny = STATE.items.some(function(i){ return i.status === "A" || i.status === "U"; });
+      var warnUnsigned = reviewedAny && !STATE.settings.signoff_confirmed_at;
+      armed = true;
+      btn.textContent = warnUnsigned ? "Sign-off not confirmed — archive anyway?" : "Confirm reset?";
+      btn.classList.add("danger-arm");
+      var armDuration = warnUnsigned ? 4500 : 3000;
+      timer = setTimeout(function(){ armed = false; btn.textContent = "New Audit"; btn.classList.remove("danger-arm"); }, armDuration);
       return;
     }
     clearTimeout(timer); armed = false; btn.textContent = "New Audit"; btn.classList.remove("danger-arm");
     try{
+      await flushPendingSaves();
       var result = await api("/api/reset", { method: "POST" });
       await loadState();
       toast(result && result.archived ? "Previous audit archived for trends — log cleared for everyone." : "New audit started — log cleared for everyone.");
@@ -1281,6 +1363,7 @@ function buildHistoryRow(row){
 async function init(){
   wireHeaderFields();
   wireAdmin();
+  wireSignoffConfirm();
   wireReset();
   $("#printBtn").addEventListener("click", function(){ window.print(); });
   $("#pdfBtn").addEventListener("click", function(){ window.location.href = "/api/pdf"; });
