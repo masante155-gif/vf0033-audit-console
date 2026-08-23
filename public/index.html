@@ -200,6 +200,31 @@
   .signoff-card.locked .signoff-fields{pointer-events:none; opacity:.5;}
   .signoff-fields .field input{min-width:140px;}
 
+  .history-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); margin-top:22px; overflow:hidden;}
+  .history-head{padding:14px 16px 10px; border-bottom:1px solid var(--line);}
+  .history-head h2{font-family:var(--font-display); font-size:15px; margin:0 0 2px;}
+  .history-sub{font-size:12px; color:var(--ink-muted);}
+  .history-body{display:flex; flex-direction:column;}
+  .history-empty{padding:24px 16px; text-align:center; color:var(--ink-faint); font-size:12.8px;}
+  .history-row{display:grid; grid-template-columns:1fr auto auto auto; gap:14px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line);}
+  .history-row:last-child{border-bottom:none;}
+  @media (max-width:860px){.history-row{grid-template-columns:1fr; gap:8px;}}
+  .history-date{font-family:var(--font-mono); font-weight:600; font-size:13px; color:var(--ink);}
+  .history-meta{font-size:11px; color:var(--ink-faint); margin-top:2px;}
+  .history-stats{display:flex; gap:6px; flex-wrap:wrap;}
+  .history-badges{display:flex; flex-direction:column; gap:4px; align-items:flex-start;}
+  .badge{display:inline-block; font-size:10.5px; font-weight:600; padding:3px 9px; border-radius:999px; white-space:nowrap;}
+  .badge.ok{background:var(--ok-tint); color:var(--ok); border:1px solid var(--ok-line);}
+  .badge.bad{background:var(--bad-tint); color:var(--bad); border:1px solid var(--bad-line);}
+  .badge.warn{background:var(--warn-tint); color:var(--warn); border:1px solid var(--warn-line);}
+  .badge.muted{background:var(--surface-3); color:var(--ink-faint); border:1px solid var(--line);}
+  .history-actions{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .history-actions .btn{white-space:nowrap;}
+  .history-signoff-form{display:none; grid-column:1 / -1; gap:8px; align-items:center; padding-top:8px; flex-wrap:wrap;}
+  .history-signoff-form.open{display:flex;}
+  .history-signoff-form input{border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:12.5px; min-width:140px;}
+  .history-amend-note{grid-column:1 / -1; font-size:10.5px; color:var(--ink-faint); padding-top:2px;}
+
   .readonly-banner{position:fixed; top:0; left:0; right:0; background:var(--warn); color:#241a02; text-align:center; font-size:12.5px; font-weight:600; padding:6px; z-index:100;}
   .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px); background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:999px; font-size:12.8px; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:80;}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
@@ -315,6 +340,16 @@
       </div>
     </aside>
   </div>
+
+  <section class="history-card no-print">
+    <div class="history-head">
+      <h2>Audit History</h2>
+      <div class="history-sub">Every audit archived by &ldquo;New Audit.&rdquo; Pull a full report for any of them, or complete a sign-off that got missed.</div>
+    </div>
+    <div class="history-body" id="historyBody">
+      <div class="history-empty" id="historyEmpty">No audits archived yet &mdash; they'll show up here after your first &ldquo;New Audit.&rdquo;</div>
+    </div>
+  </section>
 
   <footer class="page-footer">
     <span>VF-0033-00 GMP Audit Form &middot; Written by Michael Asante</span>
@@ -1125,8 +1160,121 @@ function wireReset(){
       var result = await api("/api/reset", { method: "POST" });
       await loadState();
       toast(result && result.archived ? "Previous audit archived for trends — log cleared for everyone." : "New audit started — log cleared for everyone.");
+      loadHistory();
     }catch(e){ toast("Couldn't reset: " + e.message); }
   });
+}
+
+// ---------------- History ----------------
+async function loadHistory(){
+  try{
+    var data = await api("/api/history");
+    renderHistory((data && data.history) || []);
+  }catch(e){ /* history is supplementary — a failed load shouldn't block the rest of the page */ }
+}
+
+function renderHistory(list){
+  var body = $("#historyBody");
+  body.innerHTML = "";
+  if(!list.length){
+    var empty = document.createElement("div");
+    empty.className = "history-empty"; empty.id = "historyEmpty";
+    empty.innerHTML = "No audits archived yet &mdash; they'll show up here after your first &ldquo;New Audit.&rdquo;";
+    body.appendChild(empty);
+    return;
+  }
+  // /api/history already returns newest-first (ORDER BY id DESC).
+  list.forEach(function(row){ body.appendChild(buildHistoryRow(row)); });
+}
+
+function formatArchivedAt(iso){
+  if(!iso) return "";
+  try{
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }catch(e){ return iso; }
+}
+
+function buildHistoryRow(row){
+  var el = document.createElement("div");
+  el.className = "history-row";
+  el.dataset.id = row.id;
+
+  var main = document.createElement("div");
+  var dateEl = document.createElement("div"); dateEl.className = "history-date";
+  dateEl.textContent = row.audit_date || "Undated audit";
+  var metaEl = document.createElement("div"); metaEl.className = "history-meta";
+  metaEl.textContent = (row.auditor || "—") + " · " + row.total + " items · archived " + formatArchivedAt(row.archived_at);
+  main.appendChild(dateEl); main.appendChild(metaEl);
+  el.appendChild(main);
+
+  var stats = document.createElement("div"); stats.className = "history-stats";
+  var okChip = document.createElement("span"); okChip.className = "chip ok";
+  okChip.innerHTML = "Acceptable <b>" + row.accepted + "</b>";
+  var badChip = document.createElement("span"); badChip.className = "chip bad";
+  badChip.innerHTML = "Unacceptable <b>" + row.unacceptable + "</b>";
+  stats.appendChild(okChip); stats.appendChild(badChip);
+  el.appendChild(stats);
+
+  var badges = document.createElement("div"); badges.className = "history-badges";
+  var verifiedBadge = document.createElement("span");
+  if(row.verified === true){ verifiedBadge.className = "badge ok"; verifiedBadge.textContent = "Verified unaltered"; }
+  else if(row.verified === false){ verifiedBadge.className = "badge bad"; verifiedBadge.textContent = "Altered since archiving"; }
+  else { verifiedBadge.className = "badge muted"; verifiedBadge.textContent = "Not checkable"; }
+  var signedBadge = document.createElement("span");
+  if(row.signedOff){ signedBadge.className = "badge ok"; signedBadge.textContent = "Signed by " + row.reviewed_by + " on " + row.reviewed_date; }
+  else { signedBadge.className = "badge warn"; signedBadge.textContent = "Sign-off pending"; }
+  badges.appendChild(verifiedBadge); badges.appendChild(signedBadge);
+  el.appendChild(badges);
+
+  var actions = document.createElement("div"); actions.className = "history-actions";
+  var pdfLink = document.createElement("a");
+  pdfLink.className = "btn ghost"; pdfLink.href = "/api/history/" + row.id + "/pdf"; pdfLink.target = "_blank"; pdfLink.rel = "noopener";
+  pdfLink.textContent = "Download PDF";
+  actions.appendChild(pdfLink);
+
+  var toggleBtn = document.createElement("button");
+  toggleBtn.type = "button"; toggleBtn.className = row.signedOff ? "btn ghost admin-only" : "btn";
+  toggleBtn.textContent = row.signedOff ? "Correct sign-off" : "Sign Off";
+  actions.appendChild(toggleBtn);
+  el.appendChild(actions);
+
+  var form = document.createElement("div"); form.className = "history-signoff-form";
+  var nameInput = document.createElement("input");
+  nameInput.type = "text"; nameInput.placeholder = "Reviewer name (SQF Practitioner)"; nameInput.value = row.signedOff ? row.reviewed_by : "";
+  var dateInput = document.createElement("input");
+  dateInput.type = "text"; dateInput.placeholder = "MM/DD/YYYY"; dateInput.value = row.signedOff ? row.reviewed_date : "";
+  var saveBtn = document.createElement("button");
+  saveBtn.type = "button"; saveBtn.className = "btn primary"; saveBtn.textContent = "Save";
+  var cancelBtn = document.createElement("button");
+  cancelBtn.type = "button"; cancelBtn.className = "btn ghost"; cancelBtn.textContent = "Cancel";
+  form.appendChild(nameInput); form.appendChild(dateInput); form.appendChild(saveBtn); form.appendChild(cancelBtn);
+  if(row.signedOff){
+    var note = document.createElement("div"); note.className = "history-amend-note";
+    note.textContent = "Changing an already-signed audit requires the admin passcode and is logged as a correction, not a silent edit.";
+    form.appendChild(note);
+  }
+  el.appendChild(form);
+
+  toggleBtn.addEventListener("click", function(){ form.classList.toggle("open"); });
+  cancelBtn.addEventListener("click", function(){ form.classList.remove("open"); });
+  saveBtn.addEventListener("click", async function(){
+    var name = nameInput.value.trim();
+    var date = dateInput.value.trim();
+    if(!name || !date){ toast("Enter both a reviewer name and a date."); return; }
+    saveBtn.disabled = true;
+    try{
+      var body = { reviewed_by: name, reviewed_date: date };
+      if(row.signedOff) body.changed_by = name;
+      await api("/api/history/" + row.id + "/signoff", { method: "POST", body: JSON.stringify(body) });
+      toast("Sign-off saved.");
+      loadHistory();
+    }catch(e){ toast("Couldn't save sign-off: " + e.message); }
+    saveBtn.disabled = false;
+  });
+
+  return el;
 }
 
 // ---------------- Init ----------------
@@ -1142,6 +1290,7 @@ async function init(){
     showConnChip();
   }
   await restoreAdminIfAny();
+  loadHistory();
   jumpToLinkedEntry();
   pollLoop();
 }
