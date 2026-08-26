@@ -694,6 +694,32 @@ app.post("/api/history/:id/signoff", (req, res) => {
   res.json({ ok: true, amended: alreadySigned, snapshot: snapshotSummary(getSnapshot(id)) });
 });
 
+// Permanently removes an archived audit — meant for trial/demo runs that
+// were never real audits and shouldn't skew trend data (recurring issues,
+// the pass-rate history chart, the new Dashboard tab's trend). Admin-only
+// and irreversible: no amendment trail, unlike sign-off corrections above,
+// because there is nothing sensible left to log once the record is gone.
+app.delete("/api/history/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const snapshot = getSnapshot(id);
+  if (!snapshot || snapshot.audit_type !== "gmp") return res.status(404).json({ error: "Archived audit not found." });
+  const snapshotItems = getSnapshotItems(id);
+  const del = db.transaction(() => {
+    snapshotItems.forEach((it) => {
+      if (it.photo_filename) {
+        const p = path.join(DATA_DIR, "uploads", it.photo_filename);
+        fs.existsSync(p) && fs.unlinkSync(p);
+      }
+    });
+    db.prepare("DELETE FROM audit_snapshot_amendments WHERE snapshot_id = ?").run(id);
+    db.prepare("DELETE FROM audit_snapshot_items WHERE snapshot_id = ?").run(id);
+    db.prepare("DELETE FROM audit_snapshots WHERE id = ?").run(id);
+  });
+  del();
+  bumpRevision();
+  res.json({ ok: true, deleted: id });
+});
+
 // ===========================================================================
 // Internal Audit / Glass & Brittle Audit — generic, type-aware routes.
 //
@@ -1160,6 +1186,29 @@ app.post("/api/:type/history/:id/signoff", requireNewType, (req, res) => {
 
   db.prepare("UPDATE audit_snapshots SET reviewed_by = ?, reviewed_date = ? WHERE id = ?").run(reviewedBy, reviewedDate, id);
   res.json({ ok: true, amended: alreadySigned, snapshot: snapshotSummary(getSnapshot(id)) });
+});
+
+// See the GMP /api/history/:id DELETE route above for the rationale — same
+// behavior, scoped to this audit type.
+app.delete("/api/:type/history/:id", requireNewType, requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const snapshot = getSnapshot(id);
+  if (!snapshot || snapshot.audit_type !== req.params.type) return res.status(404).json({ error: "Archived audit not found." });
+  const snapshotItems = getSnapshotItems(id);
+  const del = db.transaction(() => {
+    snapshotItems.forEach((it) => {
+      if (it.photo_filename) {
+        const p = path.join(DATA_DIR, "uploads", it.photo_filename);
+        fs.existsSync(p) && fs.unlinkSync(p);
+      }
+    });
+    db.prepare("DELETE FROM audit_snapshot_amendments WHERE snapshot_id = ?").run(id);
+    db.prepare("DELETE FROM audit_snapshot_items WHERE snapshot_id = ?").run(id);
+    db.prepare("DELETE FROM audit_snapshots WHERE id = ?").run(id);
+  });
+  del();
+  bumpRevision();
+  res.json({ ok: true, deleted: id });
 });
 
 app.use("/uploads", express.static(path.join(DATA_DIR, "uploads"), { maxAge: "30d" }));
