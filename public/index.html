@@ -54,6 +54,14 @@
   input,textarea{font-family:inherit; color:inherit;}
   .wrap{max-width:1260px; margin:0 auto; padding:20px 20px 64px;}
 
+  /* ---- Audit type tabs ---- */
+  .type-tabs{display:flex; gap:6px; padding-top:18px; flex-wrap:wrap;}
+  .type-tab{border:1px solid var(--line); background:var(--surface); color:var(--ink-muted); font-size:12.5px; font-weight:600; padding:8px 14px; border-radius:999px; display:inline-flex; align-items:center; gap:6px;}
+  .type-tab:hover{border-color:var(--accent); color:var(--ink);}
+  .type-tab.active{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
+  .audit-panel{display:none;}
+  .audit-panel.active{display:block;}
+
   header.top{position:sticky; top:0; z-index:40; background:var(--bg); padding-top:18px; padding-bottom:14px; border-bottom:1px solid var(--line);}
   .top-row{display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap;}
   .brand{display:flex; flex-direction:column; gap:2px;}
@@ -128,6 +136,13 @@
   html.admin-mode .item-text-input{background:var(--surface-2); border:1px solid var(--line); border-radius:4px; padding:4px 6px;}
   .item-row[data-status="U"]{background:var(--bad-tint); box-shadow:inset 3px 0 0 var(--bad);}
   .item-row[data-status="A"]{box-shadow:inset 3px 0 0 var(--ok);}
+  .item-row[data-status="S"]{box-shadow:inset 3px 0 0 var(--ok);}
+  .item-row[data-status="N"]{box-shadow:inset 3px 0 0 var(--ink-faint); opacity:.8;}
+  .item-row.no-delete{grid-template-columns:34px 1fr auto;}
+  .item-row.three-state{grid-template-columns:34px 1fr 118px 26px;}
+  .item-text{font-size:13.3px; color:var(--ink); line-height:1.4; display:flex; align-items:center; gap:8px;}
+  .item-text .item-text-input{width:auto; flex:1; min-width:0;}
+  .item-zone-badge{font-size:10px; font-weight:600; padding:2px 7px; border-radius:999px; background:var(--surface-3); color:var(--ink-faint); white-space:nowrap; flex:none;}
   .item-delete{border:none; background:transparent; color:var(--ink-faint); font-size:16px; line-height:1; border-radius:4px; width:24px; height:24px;}
   .item-delete:hover{color:var(--bad); background:var(--bad-tint);}
   .add-item-btn{display:none; width:100%; border:none; border-top:1px dashed var(--line); background:var(--surface-2); color:var(--accent); font-size:12px; font-weight:600; padding:9px; text-align:center;}
@@ -135,11 +150,30 @@
   .add-item-form{display:flex; gap:8px; padding:10px 16px; border-top:1px solid var(--line); background:var(--surface-2);}
   .add-item-form input{flex:1; border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:13px;}
 
+  .section-name-input{font-family:var(--font-display); font-size:14px; font-weight:700; border:none; background:transparent; color:var(--ink); padding:2px 4px; margin:-2px -4px; border-radius:4px; min-width:0; flex:1;}
+  html:not(.admin-mode) .section-name-input{pointer-events:none;}
+  html.admin-mode .section-name-input{background:var(--surface); border:1px dashed var(--line-strong);}
+  html.admin-mode .section-name-input:focus{border-color:var(--accent); border-style:solid;}
+  .section-head{gap:8px;}
+  .section-head-name{display:flex; align-items:center; flex:1; min-width:0;}
+  .section-delete{display:none; border:none; background:transparent; color:var(--ink-faint); font-size:15px; line-height:1; border-radius:4px; width:22px; height:22px; flex:none;}
+  html.admin-mode .section-delete{display:inline-flex; align-items:center; justify-content:center;}
+  .section-delete:hover{color:var(--bad); background:var(--bad-tint);}
+  .add-section-btn{display:none; width:100%; border:1px dashed var(--line-strong); border-radius:var(--radius); background:var(--surface-2); color:var(--accent); font-size:12.5px; font-weight:600; padding:12px; text-align:center; margin-top:4px;}
+  html.admin-mode .add-section-btn{display:block;}
+  .add-section-form{display:flex; gap:8px; flex-wrap:wrap; padding:12px 16px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); margin-top:4px;}
+  .add-section-form input{flex:1; min-width:160px; border:1px solid var(--line); border-radius:4px; padding:7px 9px; font-size:13px;}
+
   .toggle{display:inline-flex; border:1px solid var(--line-strong); border-radius:999px; overflow:hidden; height:28px;}
   .toggle button{border:none; background:var(--surface); color:var(--ink-muted); font-size:12px; font-weight:700; width:34px; height:100%; font-family:var(--font-mono); transition:background .15s ease,color .15s ease;}
-  .toggle button:first-child{border-right:1px solid var(--line-strong);}
+  .toggle button:not(:last-child){border-right:1px solid var(--line-strong);}
   .item-row[data-status="A"] .btn-a{background:var(--ok); color:#fff;}
   .item-row[data-status="U"] .btn-u{background:var(--bad); color:#fff;}
+  .toggle button.active[data-kind="pass"]{background:var(--ok); color:#fff;}
+  .toggle button.active[data-kind="fail"]{background:var(--bad); color:#fff;}
+  .toggle button.active[data-kind="na"]{background:var(--ink-faint); color:#fff;}
+  select.field-select{border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface-2); padding:6px 8px; font-size:12.5px; color:var(--ink); font-family:inherit;}
+  .chip.muted{background:var(--surface-3); color:var(--ink-faint); border-color:var(--line);}
 
   /* ---- NC panel ---- */
   .nc-panel{position:sticky; top:112px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; max-height:calc(100vh - 132px); display:flex; flex-direction:column;}
@@ -237,11 +271,71 @@
 
   footer.page-footer{max-width:1260px; margin:26px auto 0; padding:0 20px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; color:var(--ink-faint); font-size:11px; font-family:var(--font-mono);}
 
+  /* ==========================================================
+     Dashboard tab — a fixed-dark "instrument panel" view across
+     Internal Audit + Glass & Brittle Audit. Deliberately does not
+     follow the app's own light/dark toggle (see --db-* tokens
+     below, set once and never overridden by [data-theme]/media) —
+     it's meant to read as one committed control-room identity,
+     not a themed page like the checklist tabs.
+  ========================================================== */
+  #panel-dashboard{ --db-bg:#0B0F10; --db-panel:#10171A; --db-panel-2:#141D20; --db-line:#22302F; --db-line-strong:#324443;
+    --db-ink:#DCE6E6; --db-muted:#7C9092; --db-faint:#495B5C; --db-accent:#4FD3C4;
+    --db-ok:#5FD98A; --db-warn:#E0A83E; --db-bad:#E2685A;
+    background:var(--db-bg); color:var(--db-ink); font-family:var(--font-body);
+    margin:0 -20px; padding:26px 20px 50px;
+  }
+  #panel-dashboard .db-mono{font-family:var(--font-mono);}
+  #panel-dashboard .db-wrap{max-width:1220px; margin:0 auto;}
+  #panel-dashboard .db-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px;}
+  #panel-dashboard .db-top h2{font-family:var(--font-mono); font-weight:700; font-size:16px; letter-spacing:.08em; margin:0; text-transform:uppercase; color:#fff;}
+  #panel-dashboard .db-top .db-sub{font-family:var(--font-mono); font-size:10.5px; color:var(--db-faint); letter-spacing:.04em; margin-top:3px;}
+  #panel-dashboard .db-status{display:flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; color:var(--db-ok); border:1px solid var(--db-line-strong); border-radius:3px; padding:5px 11px;}
+  #panel-dashboard .db-status .db-dot{width:7px;height:7px;border-radius:50%; background:var(--db-ok); box-shadow:0 0 6px var(--db-ok);}
+  #panel-dashboard .db-panel{background:var(--db-panel); border:1px solid var(--db-line); border-radius:4px; padding:16px;}
+  #panel-dashboard .db-label{font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--db-faint); margin-bottom:10px;}
+  #panel-dashboard .db-top-grid{display:grid; grid-template-columns:236px 1fr; gap:14px; margin-bottom:14px;}
+  @media (max-width:760px){ #panel-dashboard .db-top-grid{grid-template-columns:1fr;} }
+  #panel-dashboard .db-gauge-wrap{display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
+  #panel-dashboard .db-readouts{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  #panel-dashboard .db-rval{font-family:var(--font-mono); font-weight:700; font-size:26px; color:#fff; font-variant-numeric:tabular-nums;}
+  #panel-dashboard .db-rval small{font-size:13px; color:var(--db-muted); font-weight:500;}
+  #panel-dashboard .db-rnote{font-family:var(--font-mono); font-size:10px; color:var(--db-faint); margin-top:5px;}
+  #panel-dashboard .db-row2{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;}
+  @media (max-width:760px){ #panel-dashboard .db-row2{grid-template-columns:1fr;} }
+  #panel-dashboard .db-zones{display:flex; gap:9px;}
+  #panel-dashboard .db-zone-tile{flex:1; border:1px solid var(--db-line-strong); border-radius:3px; padding:10px 8px; text-align:center;}
+  #panel-dashboard .db-zone-tile .db-zn{font-family:var(--font-mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--db-faint); margin-bottom:6px;}
+  #panel-dashboard .db-zone-tile .db-zled{width:10px;height:10px;border-radius:50%; margin:0 auto 7px;}
+  #panel-dashboard .db-zone-tile .db-zval{font-family:var(--font-mono); font-weight:700; font-size:15px; color:#fff;}
+  #panel-dashboard .db-prog-row{display:flex; align-items:center; gap:10px; margin-bottom:11px;}
+  #panel-dashboard .db-prog-row:last-child{margin-bottom:0;}
+  #panel-dashboard .db-prog-name{font-family:var(--font-mono); font-size:10.5px; width:104px; flex-shrink:0; color:var(--db-muted); text-transform:uppercase; letter-spacing:.03em;}
+  #panel-dashboard .db-track{flex:1; height:6px; background:var(--db-panel-2); border:1px solid var(--db-line-strong); border-radius:2px; overflow:hidden;}
+  #panel-dashboard .db-fill{height:100%;}
+  #panel-dashboard .db-prog-pct{font-family:var(--font-mono); font-weight:700; font-size:11.5px; width:38px; text-align:right; flex-shrink:0;}
+  #panel-dashboard .db-log-row{display:grid; grid-template-columns:16px 1fr auto; gap:12px; align-items:center; padding:11px 2px; border-bottom:1px solid var(--db-line);}
+  #panel-dashboard .db-log-row:last-child{border-bottom:none;}
+  #panel-dashboard .db-log-row .db-bracket{color:var(--db-faint); font-family:var(--font-mono); font-size:12px;}
+  #panel-dashboard .db-log-item{font-size:12.5px; color:var(--db-ink); margin-bottom:3px;}
+  #panel-dashboard .db-log-meta{font-family:var(--font-mono); font-size:10px; color:var(--db-faint); text-transform:uppercase; letter-spacing:.03em;}
+  #panel-dashboard .db-log-tag{font-family:var(--font-mono); font-size:10.5px; font-weight:700; letter-spacing:.04em; padding:3px 8px; border-radius:2px; border:1px solid; white-space:nowrap;}
+  #panel-dashboard .db-log-tag.open{color:var(--db-bad); border-color:var(--db-bad); background:rgba(226,104,90,0.08);}
+  #panel-dashboard .db-log-tag.progress{color:var(--db-warn); border-color:var(--db-warn); background:rgba(224,168,62,0.08);}
+  #panel-dashboard .db-log-tag.closed{color:var(--db-ok); border-color:var(--db-ok); background:rgba(95,217,138,0.08);}
+  #panel-dashboard .db-empty{font-family:var(--font-mono); font-size:11px; color:var(--db-faint); padding:6px 0;}
+  #panel-dashboard .db-spark-row{display:flex; align-items:center; gap:12px; margin-bottom:12px;}
+  #panel-dashboard .db-spark-row:last-child{margin-bottom:0;}
+  #panel-dashboard .db-spark-label{width:104px; flex-shrink:0; font-family:var(--font-mono); font-size:10.5px; color:var(--db-muted); text-transform:uppercase; letter-spacing:.03em;}
+  #panel-dashboard .db-spark-end{font-family:var(--font-mono); font-weight:700; font-size:13px; color:#fff; margin-left:auto; flex-shrink:0;}
+  #panel-dashboard .db-foot{margin-top:16px; padding-top:12px; border-top:1px solid var(--db-line); display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:10px; color:var(--db-faint); letter-spacing:.03em;}
+  @media print{ #panel-dashboard{display:none !important;} }
+
   @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
 
   @media print{
     header.top{position:static;}
-    .top-actions, .toggle, .item-delete, .add-item-btn, .add-item-form, .admin-panel, .no-print, .toast, .readonly-banner{display:none !important;}
+    .type-tabs, .top-actions, .toggle, .item-delete, .add-item-btn, .add-item-form, .section-delete, .add-section-btn, .add-section-form, .admin-panel, .no-print, .toast, .readonly-banner{display:none !important;}
     .nc-panel{position:static; max-height:none; box-shadow:none;}
     .layout{grid-template-columns:1fr; display:block;}
     .section-card, .nc-panel{box-shadow:none; break-inside:avoid;}
@@ -254,6 +348,22 @@
 </head>
 <body>
 <div class="wrap">
+  <nav class="type-tabs" id="typeTabs">
+    <button type="button" class="type-tab active" data-type="gmp">GMP Workplace Audit</button>
+    <button type="button" class="type-tab" data-type="internal">Internal Audit</button>
+    <button type="button" class="type-tab" data-type="glass">Glass &amp; Brittle Audit</button>
+    <button type="button" class="type-tab" data-type="dashboard">Dashboard</button>
+    <div class="admin-popover" style="margin-left:auto">
+      <button class="btn admin-toggle" id="adminToggleBtn">Admin</button>
+      <div class="admin-prompt" id="adminPrompt">
+        <input type="password" id="passcodeAttempt" placeholder="Passcode">
+        <div class="err" id="adminErr"></div>
+        <button class="btn primary" id="adminSubmit" style="width:100%">Unlock</button>
+      </div>
+    </div>
+  </nav>
+
+  <div id="panel-gmp" class="audit-panel active">
   <header class="top">
     <div class="top-row">
       <div class="brand">
@@ -268,14 +378,6 @@
       <div class="top-actions">
         <button class="btn" id="printBtn">Print</button>
         <button class="btn" id="pdfBtn">Download PDF</button>
-        <div class="admin-popover">
-          <button class="btn admin-toggle" id="adminToggleBtn">Admin</button>
-          <div class="admin-prompt" id="adminPrompt">
-            <input type="password" id="passcodeAttempt" placeholder="Passcode">
-            <div class="err" id="adminErr"></div>
-            <button class="btn primary" id="adminSubmit" style="width:100%">Unlock</button>
-          </div>
-        </div>
         <button class="btn" id="resetBtn">New Audit</button>
       </div>
     </div>
@@ -367,6 +469,11 @@
     <span>VF-0033-00 GMP Audit Form &middot; Written by Michael Asante</span>
     <span>Revise Date <span id="footerRevDate">&mdash;</span></span>
   </footer>
+  </div>
+
+  <div id="panel-internal" class="audit-panel"></div>
+  <div id="panel-glass" class="audit-panel"></div>
+  <div id="panel-dashboard" class="audit-panel"></div>
 </div>
 
 <script>
@@ -749,7 +856,7 @@ function wireAddItemForms(){
       addBtn.addEventListener("click", async function(){
         var text = input.value.trim();
         if(!text){ input.focus(); return; }
-        var sectionTitle = $(".section-head h2", card).textContent;
+        var sectionTitle = $(".section-name-input", card).value;
         try{
           var res = await api("/api/items", { method: "POST", body: JSON.stringify({ section: sectionTitle, text: text }) });
           STATE.items.push(res.item);
@@ -759,6 +866,82 @@ function wireAddItemForms(){
           toast("Item " + res.item.id + " added.");
         }catch(e){ toast("Couldn't add item (is Admin unlocked?): " + e.message); }
       });
+    });
+  });
+}
+
+var armedSectionDeletes = {};
+
+function handleRenameSection(oldName, input){
+  var newName = input.value.trim();
+  if(!newName || newName === oldName){ if(!newName) input.value = oldName; return; }
+  debounceSave("section-rename-" + oldName, function(){
+    return api("/api/sections/rename", { method: "POST", body: JSON.stringify({ from: oldName, to: newName }) })
+      .then(function(){
+        STATE.items.forEach(function(i){ if(i.section === oldName) i.section = newName; });
+        var dept = (STATE.departments || []).find(function(d){ return d.section === oldName; });
+        if(dept) dept.section = newName;
+        buildDepartmentsTable();
+        toast("Section renamed to “" + newName + "”.");
+      })
+      .catch(function(e){ toast("Couldn't rename section (is Admin unlocked?): " + e.message); input.value = oldName; });
+  });
+}
+
+function handleDeleteSection(sectionName, btn){
+  if(armedSectionDeletes[sectionName]){
+    clearTimeout(armedSectionDeletes[sectionName]);
+    delete armedSectionDeletes[sectionName];
+    api("/api/sections/" + encodeURIComponent(sectionName), { method: "DELETE" })
+      .then(function(){
+        STATE.items = STATE.items.filter(function(i){ return i.section !== sectionName; });
+        STATE.departments = (STATE.departments || []).filter(function(d){ return d.section !== sectionName; });
+        renderChecklist();
+        renderSummary();
+        toast("Section “" + sectionName + "” deleted.");
+      })
+      .catch(function(e){ toast("Couldn't delete section (is Admin unlocked?): " + e.message); });
+    return;
+  }
+  btn.textContent = "✓"; btn.title = "Click again to confirm delete";
+  armedSectionDeletes[sectionName] = setTimeout(function(){
+    delete armedSectionDeletes[sectionName];
+    btn.textContent = "×"; btn.title = "Delete section “" + sectionName + "” and all its items";
+  }, 3000);
+}
+
+function wireAddSectionForm(){
+  var btn = $("#addSectionBtn");
+  btn.addEventListener("click", function(){
+    var existing = $("#addSectionForm");
+    if(existing){ existing.querySelector("input").focus(); return; }
+    var form = document.createElement("div");
+    form.className = "add-section-form"; form.id = "addSectionForm";
+    var nameInput = document.createElement("input");
+    nameInput.type = "text"; nameInput.placeholder = "New section name";
+    var textInput = document.createElement("input");
+    textInput.type = "text"; textInput.placeholder = "Wording for its first item";
+    var addBtn = document.createElement("button");
+    addBtn.type = "button"; addBtn.className = "btn primary"; addBtn.textContent = "Add Section";
+    var cancelBtn = document.createElement("button");
+    cancelBtn.type = "button"; cancelBtn.className = "btn ghost"; cancelBtn.textContent = "Cancel";
+    form.appendChild(nameInput); form.appendChild(textInput); form.appendChild(addBtn); form.appendChild(cancelBtn);
+    btn.parentNode.insertBefore(form, btn);
+    nameInput.focus();
+    cancelBtn.addEventListener("click", function(){ form.remove(); });
+    addBtn.addEventListener("click", async function(){
+      var section = nameInput.value.trim();
+      var text = textInput.value.trim();
+      if(!section || !text){ toast("Enter both a section name and first item wording."); return; }
+      if(STATE.items.some(function(i){ return i.section === section; })){ toast("A section with that name already exists."); return; }
+      try{
+        var res = await api("/api/items", { method: "POST", body: JSON.stringify({ section: section, text: text }) });
+        STATE.items.push(res.item);
+        form.remove();
+        renderChecklist();
+        renderSummary();
+        toast("Section “" + section + "” added.");
+      }catch(e){ toast("Couldn't add section (is Admin unlocked?): " + e.message); }
     });
   });
 }
@@ -777,9 +960,17 @@ function renderChecklist(){
     var card = document.createElement("div");
     card.className = "section-card";
     var head = document.createElement("div"); head.className = "section-head";
-    var h2 = document.createElement("h2"); h2.textContent = sectionName;
+    var nameWrap = document.createElement("div"); nameWrap.className = "section-head-name";
+    var nameInput = document.createElement("input");
+    nameInput.type = "text"; nameInput.className = "section-name-input"; nameInput.value = sectionName;
+    nameInput.addEventListener("input", function(){ handleRenameSection(sectionName, nameInput); });
+    nameWrap.appendChild(nameInput);
     var count = document.createElement("span"); count.className = "section-count"; count.textContent = items.length + " items";
-    head.appendChild(h2); head.appendChild(count);
+    var delBtn = document.createElement("button");
+    delBtn.type = "button"; delBtn.className = "section-delete"; delBtn.textContent = "×";
+    delBtn.title = "Delete section “" + sectionName + "” and all its items";
+    delBtn.addEventListener("click", function(){ handleDeleteSection(sectionName, delBtn); });
+    head.appendChild(nameWrap); head.appendChild(count); head.appendChild(delBtn);
     card.appendChild(head);
     items.forEach(function(item){ card.appendChild(buildItemRow(item)); });
     var addBtn = document.createElement("button");
@@ -787,7 +978,12 @@ function renderChecklist(){
     card.appendChild(addBtn);
     container.appendChild(card);
   });
+  var addSectionBtn = document.createElement("button");
+  addSectionBtn.type = "button"; addSectionBtn.className = "add-section-btn admin-only"; addSectionBtn.id = "addSectionBtn";
+  addSectionBtn.textContent = "+ Add Section";
+  container.appendChild(addSectionBtn);
   wireAddItemForms();
+  wireAddSectionForm();
 }
 
 // ---------------- Non-Conformance panel ----------------
@@ -1388,6 +1584,1330 @@ function jumpToLinkedEntry(){
 document.addEventListener("DOMContentLoaded", init);
 })();
 
+</script>
+
+<!-- ======================================================================
+     Internal Audit / Glass & Brittle Audit — a second, self-contained
+     script. Deliberately kept out of the GMP IIFE above so nothing here
+     can touch GMP's variables, DOM, or behavior. Each new audit type gets
+     its own instance of mountAuditConsole(), built into its own empty
+     panel container (#panel-internal / #panel-glass), talking only to its
+     own /api/<type>/... routes. Admin unlock is shared (same sessionStorage
+     key GMP already writes to) since the passcode is account-wide.
+====================================================================== -->
+<script>
+(function(){
+"use strict";
+
+function $(sel, root){ return (root || document).querySelector(sel); }
+function $all(sel, root){ return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+
+// ---------------- Tab switching ----------------
+function wireTabs(){
+  var tabs = $all(".type-tab");
+  var panels = {
+    gmp: document.getElementById("panel-gmp"),
+    internal: document.getElementById("panel-internal"),
+    glass: document.getElementById("panel-glass"),
+    dashboard: document.getElementById("panel-dashboard"),
+  };
+  tabs.forEach(function(tab){
+    tab.addEventListener("click", function(){
+      var type = tab.dataset.type;
+      tabs.forEach(function(t){ t.classList.toggle("active", t === tab); });
+      Object.keys(panels).forEach(function(key){
+        panels[key].classList.toggle("active", key === type);
+      });
+      if(type === "internal") internalConsole.init();
+      if(type === "glass") glassConsole.init();
+      if(type === "dashboard") dashboardConsole.init();
+    });
+  });
+}
+
+function toast(msg){
+  var t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(function(){ t.classList.add("show"); });
+  setTimeout(function(){ t.classList.remove("show"); setTimeout(function(){ t.remove(); }, 250); }, 3400);
+}
+
+function setValueIfIdle(el, value){
+  if(!el) return;
+  if(document.activeElement === el) return;
+  if(el.value !== value) el.value = value == null ? "" : value;
+}
+
+function formatArchivedAt(iso){
+  if(!iso) return "";
+  try{
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }catch(e){ return iso; }
+}
+
+function panelSkeleton(cfg){
+  var zoneFieldHtml = cfg.hasZoneField
+    ? '<div class="field"><label>Zone</label><select class="field-select" data-el="zoneFilter"><option value="">All zones</option>' +
+      cfg.zoneOptions.map(function(z){ return '<option value="' + z[0] + '">' + z[0] + ' (' + z[1] + ')</option>'; }).join("") +
+      '</select></div>'
+    : "";
+  var naChipHtml = cfg.hasNaStatus
+    ? '<span class="chip muted">N/A <b data-el="chipNa">0</b></span>'
+    : "";
+  return (
+    '<header class="top">' +
+      '<div class="top-row">' +
+        '<div class="brand">' +
+          '<input type="text" class="eyebrow header-editable" data-el="eyebrowInput" aria-label="Eyebrow label">' +
+          '<h1><input type="text" class="h1-input header-editable" data-el="titleInput" aria-label="Console title"></h1>' +
+          '<input type="text" class="subtitle header-editable" data-el="subtitleInput" aria-label="Subtitle">' +
+        '</div>' +
+        '<div class="meta-fields">' +
+          '<div class="field"><label>Auditor</label><input data-el="auditor" type="text" placeholder="Name" autocomplete="off"></div>' +
+          '<div class="field"><label>Date</label><input data-el="auditDate" type="text" placeholder="MM/DD/YYYY" autocomplete="off"></div>' +
+          zoneFieldHtml +
+        '</div>' +
+        '<div class="top-actions">' +
+          '<button class="btn" data-el="printBtn">Print</button>' +
+          '<button class="btn" data-el="pdfBtn">Download PDF</button>' +
+          '<button class="btn" data-el="resetBtn">New Audit</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="summary-row">' +
+        '<span class="chip">Reviewed <b data-el="chipReviewed">0</b>/<span data-el="chipTotal">0</span></span>' +
+        '<div class="progress-track"><div class="progress-fill" data-el="progressFill"></div></div>' +
+        '<span class="chip ok">' + cfg.passLabel + ' <b data-el="chipOk">0</b></span>' +
+        '<span class="chip bad">' + cfg.failLabel + ' <b data-el="chipBad">0</b></span>' +
+        naChipHtml +
+        '<span class="chip warn" data-el="chipPending" style="display:none">Awaiting acknowledgment <b data-el="chipPendingNum">0</b></span>' +
+        '<span class="chip" data-el="connChip" style="display:none">Reconnecting&hellip;</span>' +
+      '</div>' +
+    '</header>' +
+    '<div class="admin-panel" data-el="adminPanel">' +
+      '<h3>Admin Settings</h3>' +
+      '<div class="admin-grid">' +
+        '<div class="field"><label>Next Review Due</label><input type="text" data-el="reviewDate" placeholder="MM/DD/YYYY"></div>' +
+        '<div class="field"><label>Form Revision Date</label><input type="text" data-el="revisionDate" placeholder="MM/DD/YYYY"></div>' +
+      '</div>' +
+      '<div class="admin-note">Checklist content for this audit type comes from its source workbook and isn&rsquo;t editable here. The eyebrow label, title, and subtitle above are editable directly while Admin mode is on.</div>' +
+    '</div>' +
+    '<div class="layout">' +
+      '<main data-el="checklist"></main>' +
+      '<aside class="nc-panel">' +
+        '<div class="nc-head">' +
+          '<div class="nc-head-row"><h2>Non-Conformance Log</h2><span class="nc-badge" data-el="ncCount">0 open</span></div>' +
+          '<div class="nc-instructions"><b>Instructions:</b> Any &ldquo;' + cfg.failLabel + '&rdquo; item needs a corrective action' +
+          (cfg.hasCapaStatus ? " and a CAPA status" : "") + '. Someone must acknowledge before sign-off.</div>' +
+        '</div>' +
+        '<div class="nc-body" data-el="ncBody">' +
+          '<div class="nc-empty" data-el="ncEmpty">No deviations logged yet.<br>Mark an item &ldquo;' + cfg.failLabel + '&rdquo; on the checklist to open a row here.</div>' +
+        '</div>' +
+        '<div class="signoff-card" data-el="signoffCard">' +
+          '<h3>Sign-Off</h3>' +
+          '<div class="signoff-gate locked" data-el="signoffGate">All open deviations must be acknowledged first.</div>' +
+          '<div class="signoff-fields" data-el="signoffFields">' +
+            '<div class="field"><label>QA Lead / Tech Initials</label><input data-el="qaInitials" type="text" placeholder="Initials"></div>' +
+            '<div class="field"><label>Reviewed By</label><input data-el="reviewedBy" type="text" placeholder="Name"></div>' +
+            '<div class="field"><label>Date</label><input data-el="reviewedDate" type="text" placeholder="MM/DD/YYYY"></div>' +
+            '<div class="field signoff-confirm-field"><label>&nbsp;</label><button class="btn" data-el="confirmSignoffBtn" type="button">Confirm Sign-Off</button></div>' +
+          '</div>' +
+          '<div class="signoff-confirmed" data-el="signoffConfirmed">' +
+            '<span class="signoff-confirmed-icon" aria-hidden="true">&#10003;</span>' +
+            '<span data-el="signoffConfirmedText">Signed.</span>' +
+            '<button class="btn ghost" data-el="editSignoffBtn" type="button">Edit</button>' +
+          '</div>' +
+        '</div>' +
+      '</aside>' +
+    '</div>' +
+    '<section class="history-card no-print">' +
+      '<div class="history-head">' +
+        '<h2>Audit History</h2>' +
+        '<div class="history-sub">Every audit archived by &ldquo;New Audit.&rdquo; Pull a full report for any of them, or complete a sign-off that got missed.</div>' +
+      '</div>' +
+      '<div class="history-body" data-el="historyBody">' +
+        '<div class="history-empty">No audits archived yet &mdash; they&rsquo;ll show up here after your first &ldquo;New Audit.&rdquo;</div>' +
+      '</div>' +
+    '</section>' +
+    '<footer class="page-footer">' +
+      '<span>' + cfg.docNumber + ' ' + cfg.label + ' Form &middot; Written by Michael Asante</span>' +
+      '<span>Revise Date <span data-el="footerRevDate">&mdash;</span></span>' +
+    '</footer>'
+  );
+}
+
+function mountAuditConsole(cfg){
+  var root = cfg.root;
+  var el = {};
+  var state = null;
+  var saveTimers = {}, pendingSaveFns = {};
+  var trackedRev = null;
+  var started = false;
+  var armedDelete = null; // reset-button arm state
+
+  function objWith(key, val){ var o = {}; o[key] = val; return o; }
+
+  function debounceSave(key, fn){
+    if(saveTimers[key]) clearTimeout(saveTimers[key]);
+    pendingSaveFns[key] = fn;
+    saveTimers[key] = setTimeout(function(){ delete saveTimers[key]; delete pendingSaveFns[key]; fn(); }, 600);
+  }
+  function flushPendingSaves(){
+    var keys = Object.keys(saveTimers);
+    var waits = keys.map(function(key){
+      clearTimeout(saveTimers[key]);
+      delete saveTimers[key];
+      var fn = pendingSaveFns[key];
+      delete pendingSaveFns[key];
+      var result;
+      try{ result = fn && fn(); }catch(e){ result = null; }
+      return (result && typeof result.then === "function") ? result : Promise.resolve();
+    });
+    return Promise.all(waits);
+  }
+
+  async function api(path, opts){
+    opts = opts || {};
+    var headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+    var pass = null; try{ pass = sessionStorage.getItem("adminPasscode"); }catch(e){}
+    if(pass) headers["X-Admin-Passcode"] = pass;
+    var res = await fetch(path, Object.assign({}, opts, { headers: headers }));
+    var data = null;
+    try{ data = await res.json(); }catch(e){}
+    if(!res.ok) throw new Error((data && data.error) || ("Request failed (" + res.status + ")"));
+    return data;
+  }
+
+  function anyInputFocused(){
+    var a = document.activeElement;
+    return !!(a && root.contains(a) && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT"));
+  }
+
+  function typeMeta(){ return (state && state.auditType) || {}; }
+  function passStatus(){ return (typeMeta().statusOptions || ["S", "U"])[0]; }
+  function failStatus(){ return "U"; }
+  function naStatus(){ return typeMeta().naStatus || null; }
+
+  // ---------------- Header ----------------
+  function bindOpenField(elKey, key){
+    el[elKey].addEventListener("input", function(){
+      state.settings[key] = this.value;
+      debounceSave("settings-" + key, function(){
+        return api(cfg.apiBase + "/settings", { method: "POST", body: JSON.stringify(objWith(key, state.settings[key])) })
+          .catch(function(e){ toast("Couldn't save: " + e.message); });
+      });
+    });
+  }
+  function bindGatedField(elKey, key){
+    el[elKey].addEventListener("input", function(){
+      state.settings[key] = this.value;
+      debounceSave("settings-" + key, function(){
+        return api(cfg.apiBase + "/settings", { method: "POST", body: JSON.stringify(objWith(key, state.settings[key])) })
+          .catch(function(e){ toast(e.message); loadState(); });
+      });
+    });
+  }
+  function bindAdminField(elKey, key, onSaved){
+    el[elKey].addEventListener("input", function(){
+      state.settings[key] = this.value;
+      if(onSaved) onSaved(this.value);
+      debounceSave("settings-" + key, function(){
+        return api(cfg.apiBase + "/settings", { method: "POST", body: JSON.stringify(objWith(key, state.settings[key])) })
+          .catch(function(e){ toast("Couldn't save (is Admin unlocked?): " + e.message); loadState(); });
+      });
+    });
+  }
+
+  function wireHeaderFields(){
+    bindOpenField("auditor", "auditor");
+    bindOpenField("auditDate", "audit_date");
+    bindGatedField("reviewedBy", "reviewed_by");
+    bindGatedField("reviewedDate", "reviewed_date");
+    bindOpenField("qaInitials", "qa_initials");
+    bindAdminField("eyebrowInput", "eyebrow");
+    bindAdminField("titleInput", "title");
+    bindAdminField("subtitleInput", "subtitle");
+    bindAdminField("reviewDate", "review_due");
+    bindAdminField("revisionDate", "revision_date", function(v){ el.footerRevDate.textContent = v || "—"; });
+    if(cfg.hasZoneField && el.zoneFilter){
+      el.zoneFilter.addEventListener("change", function(){
+        state.settings.zone_filter = this.value;
+        applyZoneFilter();
+        debounceSave("settings-zone_filter", function(){
+          return api(cfg.apiBase + "/settings", { method: "POST", body: JSON.stringify({ zone_filter: state.settings.zone_filter }) })
+            .catch(function(e){ toast("Couldn't save zone filter: " + e.message); });
+        });
+      });
+    }
+    el.printBtn.addEventListener("click", function(){ window.print(); });
+    el.pdfBtn.addEventListener("click", function(){ window.location.href = cfg.apiBase + "/pdf"; });
+  }
+
+  function renderHeader(){
+    var s = state.settings;
+    setValueIfIdle(el.eyebrowInput, s.eyebrow);
+    setValueIfIdle(el.titleInput, s.title);
+    setValueIfIdle(el.subtitleInput, s.subtitle);
+    setValueIfIdle(el.auditor, s.auditor);
+    setValueIfIdle(el.auditDate, s.audit_date);
+    setValueIfIdle(el.qaInitials, s.qa_initials);
+    setValueIfIdle(el.reviewedBy, s.reviewed_by);
+    setValueIfIdle(el.reviewedDate, s.reviewed_date);
+    setValueIfIdle(el.reviewDate, s.review_due);
+    setValueIfIdle(el.revisionDate, s.revision_date);
+    if(cfg.hasZoneField && el.zoneFilter) setValueIfIdle(el.zoneFilter, s.zone_filter);
+    el.footerRevDate.textContent = s.revision_date || "—";
+    document.title = s.title || cfg.label;
+  }
+
+  // ---------------- Checklist ----------------
+  function applyZoneFilter(){
+    if(!cfg.hasZoneField) return;
+    var zone = (state.settings.zone_filter || "").trim();
+    $all(".item-row", el.checklist).forEach(function(row){
+      var show = !zone || row.dataset.zone === zone;
+      row.style.display = show ? "" : "none";
+    });
+    $all(".section-card", el.checklist).forEach(function(card){
+      var anyVisible = $all(".item-row", card).some(function(r){ return r.style.display !== "none"; });
+      card.style.display = anyVisible ? "" : "none";
+    });
+  }
+
+  function buildItemRow(item){
+    var row = document.createElement("div");
+    row.className = "item-row" + ((typeMeta().statusOptions || []).length > 2 ? " three-state" : "");
+    row.dataset.itemId = item.id;
+    row.dataset.status = item.status || "";
+    if(cfg.hasZoneField) row.dataset.zone = item.zone || "";
+
+    var numEl = document.createElement("div");
+    numEl.className = "item-no";
+    numEl.textContent = String(item.id).padStart(3, "0");
+
+    var textWrap = document.createElement("div");
+    textWrap.className = "item-text";
+    var textInput = document.createElement("input");
+    textInput.type = "text"; textInput.className = "item-text-input"; textInput.value = item.text;
+    textInput.addEventListener("input", function(){
+      item.text = textInput.value;
+      debounceSave("item-text-" + item.id, function(){
+        return api(cfg.apiBase + "/items/" + item.id, { method: "PUT", body: JSON.stringify({ text: item.text }) })
+          .catch(function(e){ toast("Couldn't save item wording: " + e.message); });
+      });
+    });
+    textWrap.appendChild(textInput);
+    if(cfg.hasZoneField && item.zone){
+      var zoneBadge = document.createElement("span");
+      zoneBadge.className = "item-zone-badge";
+      zoneBadge.textContent = item.zone;
+      textWrap.appendChild(zoneBadge);
+    }
+
+    var toggle = document.createElement("div");
+    toggle.className = "toggle";
+    var options = typeMeta().statusOptions || ["S", "U"];
+    var labels = typeMeta().statusLabels || {};
+    options.forEach(function(code){
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = code;
+      btn.dataset.kind = code === passStatus() ? "pass" : code === failStatus() ? "fail" : "na";
+      if(item.status === code) btn.classList.add("active");
+      btn.setAttribute("aria-label", (labels[code] || code) + ", item " + item.id);
+      btn.addEventListener("click", function(){ setStatus(item.id, item.status === code ? "" : code); });
+      toggle.appendChild(btn);
+    });
+
+    var delBtn = document.createElement("button");
+    delBtn.type = "button"; delBtn.className = "item-delete admin-only";
+    delBtn.textContent = "×"; delBtn.title = "Delete item " + item.id;
+    delBtn.addEventListener("click", function(){ handleDeleteItem(item.id, delBtn); });
+
+    row.appendChild(numEl); row.appendChild(textWrap); row.appendChild(toggle); row.appendChild(delBtn);
+    return row;
+  }
+
+  async function setStatus(id, newStatus){
+    try{
+      var res = await api(cfg.apiBase + "/items/" + id + "/status", { method: "POST", body: JSON.stringify({ status: newStatus }) });
+      patchItem(res.item);
+    }catch(e){ toast("Couldn't update status: " + e.message); }
+  }
+
+  function patchItem(updated){
+    var idx = state.items.findIndex(function(i){ return i.id === updated.id; });
+    if(idx >= 0){ Object.assign(state.items[idx], updated); updated = state.items[idx]; }
+
+    var row = $('.item-row[data-item-id="' + updated.id + '"]', el.checklist);
+    if(row){
+      row.dataset.status = updated.status || "";
+      $all("button", $(".toggle", row)).forEach(function(btn){
+        btn.classList.toggle("active", btn.textContent === updated.status);
+      });
+    }
+
+    var nc = $('.nc-entry[data-item-id="' + updated.id + '"]', el.ncBody);
+    if(updated.status === failStatus()){
+      if(!nc){ nc = buildNcCard(updated); el.ncBody.appendChild(nc); }
+      else { updateNcCardFields(nc, updated); }
+    } else if(nc){
+      nc.remove();
+    }
+    refreshNcEmptyState();
+    renderSummary();
+    renderGate();
+  }
+
+  var armedItemDeletes = {};
+  function handleDeleteItem(id, btn){
+    if(armedItemDeletes[id]){
+      clearTimeout(armedItemDeletes[id]);
+      delete armedItemDeletes[id];
+      doDeleteItem(id);
+      return;
+    }
+    btn.textContent = "✓"; btn.title = "Click again to confirm delete";
+    armedItemDeletes[id] = setTimeout(function(){
+      delete armedItemDeletes[id];
+      btn.textContent = "×"; btn.title = "Delete item " + id;
+    }, 3000);
+  }
+
+  async function doDeleteItem(id){
+    try{
+      await api(cfg.apiBase + "/items/" + id, { method: "DELETE" });
+      state.items = state.items.filter(function(i){ return i.id !== id; });
+      var row = $('.item-row[data-item-id="' + id + '"]', el.checklist); if(row) row.remove();
+      var nc = $('.nc-entry[data-item-id="' + id + '"]', el.ncBody); if(nc) nc.remove();
+      refreshNcEmptyState(); renderSummary(); renderGate();
+      toast("Item " + id + " deleted.");
+    }catch(e){ toast("Couldn't delete (is Admin unlocked?): " + e.message); }
+  }
+
+  var armedSectionDeletes = {};
+  function handleRenameSection(oldName, input){
+    var newName = input.value.trim();
+    if(!newName || newName === oldName){ if(!newName) input.value = oldName; return; }
+    debounceSave("section-rename-" + oldName, function(){
+      return api(cfg.apiBase + "/sections/rename", { method: "POST", body: JSON.stringify({ from: oldName, to: newName }) })
+        .then(function(){
+          state.items.forEach(function(i){ if(i.section === oldName) i.section = newName; });
+          toast("Section renamed to “" + newName + "”.");
+        })
+        .catch(function(e){ toast("Couldn't rename section (is Admin unlocked?): " + e.message); input.value = oldName; });
+    });
+  }
+
+  function handleDeleteSection(sectionName, btn){
+    if(armedSectionDeletes[sectionName]){
+      clearTimeout(armedSectionDeletes[sectionName]);
+      delete armedSectionDeletes[sectionName];
+      api(cfg.apiBase + "/sections/" + encodeURIComponent(sectionName), { method: "DELETE" })
+        .then(function(){
+          state.items = state.items.filter(function(i){ return i.section !== sectionName; });
+          renderChecklist();
+          renderSummary();
+          toast("Section “" + sectionName + "” deleted.");
+        })
+        .catch(function(e){ toast("Couldn't delete section (is Admin unlocked?): " + e.message); });
+      return;
+    }
+    btn.textContent = "✓"; btn.title = "Click again to confirm delete";
+    armedSectionDeletes[sectionName] = setTimeout(function(){
+      delete armedSectionDeletes[sectionName];
+      btn.textContent = "×"; btn.title = "Delete section “" + sectionName + "” and all its items";
+    }, 3000);
+  }
+
+  function wireAddItemForms(){
+    $all(".section-card", el.checklist).forEach(function(card){
+      var btn = $(".add-item-btn", card);
+      btn.addEventListener("click", function(){
+        var existing = $(".add-item-form", card);
+        if(existing){ existing.querySelector("input").focus(); return; }
+        var form = document.createElement("div");
+        form.className = "add-item-form";
+        var input = document.createElement("input");
+        input.type = "text"; input.placeholder = "New item wording";
+        var addBtn = document.createElement("button");
+        addBtn.type = "button"; addBtn.className = "btn primary"; addBtn.textContent = "Add";
+        form.appendChild(input); form.appendChild(addBtn);
+        card.insertBefore(form, btn);
+        input.focus();
+        input.addEventListener("keydown", function(ev){ if(ev.key === "Enter") addBtn.click(); });
+        addBtn.addEventListener("click", async function(){
+          var text = input.value.trim();
+          if(!text){ input.focus(); return; }
+          var sectionTitle = $(".section-name-input", card).value;
+          try{
+            var res = await api(cfg.apiBase + "/items", { method: "POST", body: JSON.stringify({ section: sectionTitle, text: text }) });
+            state.items.push(res.item);
+            card.insertBefore(buildItemRow(res.item), form);
+            form.remove();
+            renderSummary();
+            toast("Item " + res.item.id + " added.");
+          }catch(e){ toast("Couldn't add item (is Admin unlocked?): " + e.message); }
+        });
+      });
+    });
+  }
+
+  function wireAddSectionForm(){
+    var btn = el.addSectionBtn;
+    btn.addEventListener("click", function(){
+      var existing = $(".add-section-form", el.checklist);
+      if(existing){ existing.querySelector("input").focus(); return; }
+      var form = document.createElement("div");
+      form.className = "add-section-form";
+      var nameInput = document.createElement("input");
+      nameInput.type = "text"; nameInput.placeholder = "New section name";
+      var textInput = document.createElement("input");
+      textInput.type = "text"; textInput.placeholder = "Wording for its first item";
+      var addBtn = document.createElement("button");
+      addBtn.type = "button"; addBtn.className = "btn primary"; addBtn.textContent = "Add Section";
+      var cancelBtn = document.createElement("button");
+      cancelBtn.type = "button"; cancelBtn.className = "btn ghost"; cancelBtn.textContent = "Cancel";
+      form.appendChild(nameInput); form.appendChild(textInput); form.appendChild(addBtn); form.appendChild(cancelBtn);
+      btn.parentNode.insertBefore(form, btn);
+      nameInput.focus();
+      cancelBtn.addEventListener("click", function(){ form.remove(); });
+      addBtn.addEventListener("click", async function(){
+        var section = nameInput.value.trim();
+        var text = textInput.value.trim();
+        if(!section || !text){ toast("Enter both a section name and first item wording."); return; }
+        if(state.items.some(function(i){ return i.section === section; })){ toast("A section with that name already exists."); return; }
+        try{
+          var res = await api(cfg.apiBase + "/items", { method: "POST", body: JSON.stringify({ section: section, text: text }) });
+          state.items.push(res.item);
+          form.remove();
+          renderChecklist();
+          renderSummary();
+          toast("Section “" + section + "” added.");
+        }catch(e){ toast("Couldn't add section (is Admin unlocked?): " + e.message); }
+      });
+    });
+  }
+
+  function renderChecklist(){
+    el.checklist.innerHTML = "";
+    var order = [];
+    var bySection = {};
+    state.items.forEach(function(item){
+      if(!bySection[item.section]){ bySection[item.section] = []; order.push(item.section); }
+      bySection[item.section].push(item);
+    });
+    order.forEach(function(sectionName){
+      var items = bySection[sectionName];
+      var card = document.createElement("div");
+      card.className = "section-card";
+      var head = document.createElement("div"); head.className = "section-head";
+      var nameWrap = document.createElement("div"); nameWrap.className = "section-head-name";
+      var nameInput = document.createElement("input");
+      nameInput.type = "text"; nameInput.className = "section-name-input"; nameInput.value = sectionName;
+      nameInput.addEventListener("input", function(){ handleRenameSection(sectionName, nameInput); });
+      nameWrap.appendChild(nameInput);
+      var count = document.createElement("span"); count.className = "section-count"; count.textContent = items.length + " items";
+      var delSecBtn = document.createElement("button");
+      delSecBtn.type = "button"; delSecBtn.className = "section-delete";
+      delSecBtn.textContent = "×"; delSecBtn.title = "Delete section “" + sectionName + "” and all its items";
+      delSecBtn.addEventListener("click", function(){ handleDeleteSection(sectionName, delSecBtn); });
+      head.appendChild(nameWrap); head.appendChild(count); head.appendChild(delSecBtn);
+      card.appendChild(head);
+      items.forEach(function(item){ card.appendChild(buildItemRow(item)); });
+      var addItemBtn = document.createElement("button");
+      addItemBtn.type = "button"; addItemBtn.className = "add-item-btn admin-only"; addItemBtn.textContent = "+ Add item to this section";
+      card.appendChild(addItemBtn);
+      el.checklist.appendChild(card);
+    });
+    var addSectionBtn = document.createElement("button");
+    addSectionBtn.type = "button"; addSectionBtn.className = "add-section-btn admin-only";
+    addSectionBtn.textContent = "+ Add Section";
+    el.checklist.appendChild(addSectionBtn);
+    el.addSectionBtn = addSectionBtn;
+    applyZoneFilter();
+    wireAddItemForms();
+    wireAddSectionForm();
+  }
+
+  // ---------------- Non-Conformance panel ----------------
+  function updateAckBadge(entry, initials){
+    var badge = entry._refs.badge;
+    if(initials && initials.trim()){ badge.textContent = "Acknowledged"; badge.classList.add("done"); }
+    else { badge.textContent = "Awaiting acknowledgment"; badge.classList.remove("done"); }
+  }
+
+  function fieldBlock(entry, item, labelHtml, placeholder, apiKey){
+    var wrap = document.createElement("div"); wrap.className = "nc-field";
+    var label = document.createElement("label"); label.innerHTML = labelHtml;
+    var input = document.createElement("input");
+    input.type = "text"; input.placeholder = placeholder;
+    input.addEventListener("input", function(){
+      item[apiKey] = input.value;
+      if(apiKey === "initials"){ updateAckBadge(entry, input.value); renderGate(); }
+      debounceSave("nc-" + apiKey + "-" + item.id, function(){
+        var body = {}; body[apiKey] = item[apiKey];
+        return api(cfg.apiBase + "/items/" + item.id + "/nc", { method: "POST", body: JSON.stringify(body) })
+          .catch(function(e){ toast("Couldn't save: " + e.message); });
+      });
+    });
+    wrap.appendChild(label); wrap.appendChild(input);
+    entry.appendChild(wrap);
+    return input;
+  }
+
+  async function handleClearEntry(id){
+    try{
+      var res = await api(cfg.apiBase + "/items/" + id + "/clear", { method: "POST" });
+      patchItem(res.item);
+      toast("Notes cleared for item " + id + ".");
+    }catch(e){ toast("Couldn't clear notes: " + e.message); }
+  }
+
+  async function handlePhotoPick(id, fileInput, entry){
+    var file = fileInput.files && fileInput.files[0];
+    if(!file) return;
+    var formData = new FormData();
+    formData.append("photo", file);
+    try{
+      var headers = {};
+      var pass = null; try{ pass = sessionStorage.getItem("adminPasscode"); }catch(e){}
+      if(pass) headers["X-Admin-Passcode"] = pass;
+      var res = await fetch(cfg.apiBase + "/items/" + id + "/photo", { method: "POST", body: formData, headers: headers });
+      var data = await res.json();
+      if(!res.ok) throw new Error(data.error || "Upload failed");
+      var item = state.items.find(function(i){ return i.id === id; });
+      item.photo_filename = data.photo_filename;
+      updateNcCardFields(entry, item);
+      toast("Photo attached.");
+    }catch(e){ toast("Couldn't upload photo: " + e.message); }
+    fileInput.value = "";
+  }
+
+  async function handlePhotoRemove(id, entry){
+    try{
+      await api(cfg.apiBase + "/items/" + id + "/photo", { method: "DELETE" });
+      var item = state.items.find(function(i){ return i.id === id; });
+      item.photo_filename = null;
+      updateNcCardFields(entry, item);
+    }catch(e){ toast("Couldn't remove photo: " + e.message); }
+  }
+
+  function buildNcCard(item){
+    var entry = document.createElement("div");
+    entry.className = "nc-entry";
+    entry.dataset.itemId = item.id;
+    entry.dataset.status = item.status || "";
+    entry._refs = {};
+
+    var head = document.createElement("div"); head.className = "nc-entry-head";
+    var num = document.createElement("span"); num.className = "nc-num"; num.textContent = "#" + item.id;
+    var ref = document.createElement("span"); ref.className = "nc-item-ref"; ref.textContent = item.section;
+    var badge = document.createElement("span"); badge.className = "ack-badge";
+    var clearBtn = document.createElement("button");
+    clearBtn.type = "button"; clearBtn.className = "nc-clear no-print"; clearBtn.textContent = "Clear notes";
+    clearBtn.addEventListener("click", function(){ handleClearEntry(item.id); });
+    head.appendChild(num); head.appendChild(ref); head.appendChild(badge); head.appendChild(clearBtn);
+    entry.appendChild(head);
+    entry._refs.badge = badge;
+
+    entry._refs.descInput = fieldBlock(entry, item, "Description / Deviation", "What was found", "description");
+    entry._refs.corrInput = fieldBlock(entry, item, 'Corrective Action <span class="hint">(what was done at the time)</span>', "Corrective action taken", "corrective_action");
+    entry._refs.prevInput = fieldBlock(entry, item, 'Preventive Measures <span class="hint">(steps to prevent recurrence)</span>', "Preventive measures", "preventive_measures");
+
+    if(cfg.hasCapaStatus){
+      var capaWrap = document.createElement("div"); capaWrap.className = "nc-field";
+      var capaLabel = document.createElement("label"); capaLabel.textContent = "CAPA Status";
+      var capaSelect = document.createElement("select"); capaSelect.className = "field-select";
+      (typeMeta().capaStatusOptions || ["Open", "In Progress", "Closed"]).forEach(function(opt){
+        var o = document.createElement("option"); o.value = opt; o.textContent = opt;
+        capaSelect.appendChild(o);
+      });
+      capaSelect.value = item.capa_status || "Open";
+      capaSelect.addEventListener("change", function(){
+        item.capa_status = capaSelect.value;
+        debounceSave("nc-capa_status-" + item.id, function(){
+          return api(cfg.apiBase + "/items/" + item.id + "/nc", { method: "POST", body: JSON.stringify({ capa_status: item.capa_status }) })
+            .catch(function(e){ toast("Couldn't save: " + e.message); });
+        });
+      });
+      capaWrap.appendChild(capaLabel); capaWrap.appendChild(capaSelect);
+      entry.appendChild(capaWrap);
+      entry._refs.capaSelect = capaSelect;
+    }
+
+    entry._refs.initialsInput = fieldBlock(entry, item, "Acknowledgment", "Initials", "initials");
+
+    var photoWrap = document.createElement("div"); photoWrap.className = "nc-field";
+    var photoLabel = document.createElement("label"); photoLabel.textContent = "Photo of Location";
+    var photoRow = document.createElement("div"); photoRow.className = "photo-row";
+    var pickLabel = document.createElement("label"); pickLabel.className = "photo-pick no-print"; pickLabel.textContent = "Attach photo";
+    var fileInput = document.createElement("input");
+    fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.hidden = true;
+    fileInput.addEventListener("change", function(){ handlePhotoPick(item.id, fileInput, entry); });
+    pickLabel.appendChild(fileInput);
+    var removeBtn = document.createElement("button");
+    removeBtn.type = "button"; removeBtn.className = "photo-remove no-print"; removeBtn.textContent = "Remove"; removeBtn.hidden = true;
+    removeBtn.addEventListener("click", function(){ handlePhotoRemove(item.id, entry); });
+    photoRow.appendChild(pickLabel); photoRow.appendChild(removeBtn);
+    var img = document.createElement("img"); img.className = "nc-photo"; img.alt = "Deviation location photo"; img.hidden = true;
+    photoWrap.appendChild(photoLabel); photoWrap.appendChild(photoRow); photoWrap.appendChild(img);
+    entry.appendChild(photoWrap);
+    entry._refs.img = img;
+    entry._refs.removeBtn = removeBtn;
+
+    updateNcCardFields(entry, item);
+    return entry;
+  }
+
+  function updateNcCardFields(entry, item){
+    var r = entry._refs;
+    setValueIfIdle(r.descInput, item.description);
+    setValueIfIdle(r.corrInput, item.corrective_action);
+    setValueIfIdle(r.prevInput, item.preventive_measures);
+    setValueIfIdle(r.initialsInput, item.initials);
+    if(r.capaSelect && document.activeElement !== r.capaSelect) r.capaSelect.value = item.capa_status || "Open";
+    entry.dataset.status = item.status || "";
+    if(item.photo_filename){
+      r.img.src = "/uploads/" + item.photo_filename;
+      r.img.hidden = false;
+      r.removeBtn.hidden = false;
+    } else {
+      r.img.hidden = true;
+      r.removeBtn.hidden = true;
+    }
+    updateAckBadge(entry, item.initials);
+  }
+
+  function refreshNcEmptyState(){
+    var hasAny = $all(".nc-entry", el.ncBody).length > 0;
+    el.ncEmpty.style.display = hasAny ? "none" : "block";
+  }
+
+  function renderNc(){
+    $all(".nc-entry", el.ncBody).forEach(function(e){ e.remove(); });
+    state.items.filter(function(i){ return i.status === failStatus(); }).forEach(function(item){
+      el.ncBody.appendChild(buildNcCard(item));
+    });
+    refreshNcEmptyState();
+  }
+
+  // ---------------- Summary + gate ----------------
+  function renderSummary(){
+    var total = state.items.length;
+    var reviewed = 0, ok = 0, bad = 0, na = 0;
+    var pass = passStatus(), fail = failStatus(), naCode = naStatus();
+    state.items.forEach(function(i){
+      if(i.status === pass){ reviewed++; ok++; }
+      else if(i.status === fail){ reviewed++; bad++; }
+      else if(naCode && i.status === naCode){ reviewed++; na++; }
+    });
+    el.chipReviewed.textContent = reviewed;
+    el.chipTotal.textContent = total;
+    el.chipOk.textContent = ok;
+    el.chipBad.textContent = bad;
+    if(el.chipNa) el.chipNa.textContent = na;
+    el.progressFill.style.width = (total ? Math.round((reviewed / total) * 100) : 0) + "%";
+    el.ncCount.textContent = bad + " open";
+  }
+
+  function renderGate(){
+    var openItems = state.items.filter(function(i){ return i.status === failStatus(); });
+    var pending = openItems.filter(function(i){ return !i.initials || !i.initials.trim(); }).map(function(i){ return i.id; });
+    var card = el.signoffCard, gate = el.signoffGate;
+    if(pending.length === 0){
+      card.classList.remove("locked"); gate.classList.remove("locked"); gate.classList.add("open");
+      gate.textContent = openItems.length === 0
+        ? "No open deviations. Ready for sign-off."
+        : "All open deviations acknowledged. Ready for sign-off.";
+      el.chipPending.style.display = "none";
+    } else {
+      card.classList.add("locked"); gate.classList.add("locked"); gate.classList.remove("open");
+      gate.textContent = "Waiting on acknowledgment for item(s) #" + pending.join(", #") + " before sign-off.";
+      el.chipPending.style.display = "inline-flex";
+      el.chipPendingNum.textContent = pending.length;
+    }
+  }
+
+  function renderSignoffConfirm(){
+    var card = el.signoffCard;
+    var confirmedAt = state.settings.signoff_confirmed_at;
+    if(confirmedAt){
+      card.classList.add("confirmed");
+      var who = state.settings.reviewed_by || "—";
+      var when = state.settings.reviewed_date || "—";
+      el.signoffConfirmedText.textContent = "Signed by " + who + " on " + when + ".";
+    } else {
+      card.classList.remove("confirmed");
+    }
+  }
+
+  function wireSignoffConfirm(){
+    el.confirmSignoffBtn.addEventListener("click", async function(){
+      var by = el.reviewedBy.value.trim();
+      var date = el.reviewedDate.value.trim();
+      if(!by || !date){ toast("Enter both a reviewer name and a date before confirming sign-off."); return; }
+      try{
+        await flushPendingSaves();
+        var res = await api(cfg.apiBase + "/settings/confirm-signoff", { method: "POST", body: JSON.stringify({ reviewed_by: by, reviewed_date: date }) });
+        state.settings = res.settings;
+        renderSignoffConfirm();
+        toast("Sign-off confirmed.");
+      }catch(e){ toast("Couldn't confirm sign-off: " + e.message); }
+    });
+    el.editSignoffBtn.addEventListener("click", async function(){
+      try{
+        var res = await api(cfg.apiBase + "/settings/unconfirm-signoff", { method: "POST" });
+        state.settings = res.settings;
+        renderSignoffConfirm();
+      }catch(e){ toast("Couldn't unlock sign-off: " + e.message); }
+    });
+  }
+
+  // ---------------- Reset ----------------
+  function wireReset(){
+    var btn = el.resetBtn;
+    var armed = false, timer = null;
+    btn.addEventListener("click", async function(){
+      if(!armed){
+        var reviewedAny = state.items.some(function(i){ return i.status && i.status !== ""; });
+        var warnUnsigned = reviewedAny && !state.settings.signoff_confirmed_at;
+        armed = true;
+        btn.textContent = warnUnsigned ? "Sign-off not confirmed — archive anyway?" : "Confirm reset?";
+        btn.classList.add("danger-arm");
+        var armDuration = warnUnsigned ? 4500 : 3000;
+        timer = setTimeout(function(){ armed = false; btn.textContent = "New Audit"; btn.classList.remove("danger-arm"); }, armDuration);
+        return;
+      }
+      clearTimeout(timer); armed = false; btn.textContent = "New Audit"; btn.classList.remove("danger-arm");
+      try{
+        await flushPendingSaves();
+        var result = await api(cfg.apiBase + "/reset", { method: "POST" });
+        await loadState();
+        toast(result && result.archived ? "Previous audit archived for trends — log cleared for everyone." : "New audit started — log cleared for everyone.");
+        loadHistory();
+      }catch(e){ toast("Couldn't reset: " + e.message); }
+    });
+  }
+
+  // ---------------- History ----------------
+  async function loadHistory(){
+    try{
+      var data = await api(cfg.apiBase + "/history");
+      renderHistory((data && data.history) || []);
+    }catch(e){ /* supplementary — a failed load shouldn't block the rest of the panel */ }
+  }
+
+  function renderHistory(list){
+    var body = el.historyBody;
+    body.innerHTML = "";
+    if(!list.length){
+      var empty = document.createElement("div");
+      empty.className = "history-empty";
+      empty.innerHTML = "No audits archived yet &mdash; they&rsquo;ll show up here after your first &ldquo;New Audit.&rdquo;";
+      body.appendChild(empty);
+      return;
+    }
+    list.forEach(function(row){ body.appendChild(buildHistoryRow(row)); });
+  }
+
+  function buildHistoryRow(row){
+    var rowEl = document.createElement("div");
+    rowEl.className = "history-row";
+    rowEl.dataset.id = row.id;
+
+    var main = document.createElement("div");
+    var dateEl = document.createElement("div"); dateEl.className = "history-date";
+    dateEl.textContent = row.audit_date || "Undated audit";
+    var metaEl = document.createElement("div"); metaEl.className = "history-meta";
+    metaEl.textContent = (row.auditor || "—") + " · " + row.total + " items · archived " + formatArchivedAt(row.archived_at);
+    main.appendChild(dateEl); main.appendChild(metaEl);
+    rowEl.appendChild(main);
+
+    var stats = document.createElement("div"); stats.className = "history-stats";
+    var okChip = document.createElement("span"); okChip.className = "chip ok";
+    okChip.innerHTML = cfg.passLabel + " <b>" + row.accepted + "</b>";
+    var badChip = document.createElement("span"); badChip.className = "chip bad";
+    badChip.innerHTML = cfg.failLabel + " <b>" + row.unacceptable + "</b>";
+    stats.appendChild(okChip); stats.appendChild(badChip);
+    rowEl.appendChild(stats);
+
+    var badges = document.createElement("div"); badges.className = "history-badges";
+    var verifiedBadge = document.createElement("span");
+    if(row.verified === true){ verifiedBadge.className = "badge ok"; verifiedBadge.textContent = "Verified unaltered"; }
+    else if(row.verified === false){ verifiedBadge.className = "badge bad"; verifiedBadge.textContent = "Altered since archiving"; }
+    else { verifiedBadge.className = "badge muted"; verifiedBadge.textContent = "Not checkable"; }
+    var signedBadge = document.createElement("span");
+    if(row.signedOff){ signedBadge.className = "badge ok"; signedBadge.textContent = "Signed by " + row.reviewed_by + " on " + row.reviewed_date; }
+    else { signedBadge.className = "badge warn"; signedBadge.textContent = "Sign-off pending"; }
+    badges.appendChild(verifiedBadge); badges.appendChild(signedBadge);
+    rowEl.appendChild(badges);
+
+    var actions = document.createElement("div"); actions.className = "history-actions";
+    var pdfLink = document.createElement("a");
+    pdfLink.className = "btn ghost"; pdfLink.href = cfg.apiBase + "/history/" + row.id + "/pdf"; pdfLink.target = "_blank"; pdfLink.rel = "noopener";
+    pdfLink.textContent = "Download PDF";
+    actions.appendChild(pdfLink);
+
+    var toggleBtn = document.createElement("button");
+    toggleBtn.type = "button"; toggleBtn.className = row.signedOff ? "btn ghost admin-only" : "btn";
+    toggleBtn.textContent = row.signedOff ? "Correct sign-off" : "Sign Off";
+    actions.appendChild(toggleBtn);
+    rowEl.appendChild(actions);
+
+    var form = document.createElement("div"); form.className = "history-signoff-form";
+    var nameInput = document.createElement("input");
+    nameInput.type = "text"; nameInput.placeholder = "Reviewer name"; nameInput.value = row.signedOff ? row.reviewed_by : "";
+    var dateInput = document.createElement("input");
+    dateInput.type = "text"; dateInput.placeholder = "MM/DD/YYYY"; dateInput.value = row.signedOff ? row.reviewed_date : "";
+    var saveBtn = document.createElement("button");
+    saveBtn.type = "button"; saveBtn.className = "btn primary"; saveBtn.textContent = "Save";
+    var cancelBtn = document.createElement("button");
+    cancelBtn.type = "button"; cancelBtn.className = "btn ghost"; cancelBtn.textContent = "Cancel";
+    form.appendChild(nameInput); form.appendChild(dateInput); form.appendChild(saveBtn); form.appendChild(cancelBtn);
+    if(row.signedOff){
+      var note = document.createElement("div"); note.className = "history-amend-note";
+      note.textContent = "Changing an already-signed audit requires the admin passcode and is logged as a correction, not a silent edit.";
+      form.appendChild(note);
+    }
+    rowEl.appendChild(form);
+
+    toggleBtn.addEventListener("click", function(){ form.classList.toggle("open"); });
+    cancelBtn.addEventListener("click", function(){ form.classList.remove("open"); });
+    saveBtn.addEventListener("click", async function(){
+      var name = nameInput.value.trim();
+      var date = dateInput.value.trim();
+      if(!name || !date){ toast("Enter both a reviewer name and a date."); return; }
+      saveBtn.disabled = true;
+      try{
+        var body = { reviewed_by: name, reviewed_date: date };
+        if(row.signedOff) body.changed_by = name;
+        await api(cfg.apiBase + "/history/" + row.id + "/signoff", { method: "POST", body: JSON.stringify(body) });
+        toast("Sign-off saved.");
+        loadHistory();
+      }catch(e){ toast("Couldn't save sign-off: " + e.message); }
+      saveBtn.disabled = false;
+    });
+
+    return rowEl;
+  }
+
+  // ---------------- Load + poll ----------------
+  async function loadState(){
+    state = await api(cfg.apiBase + "/state");
+    var revData = await api("/api/revision");
+    trackedRev = revData.revision;
+    renderHeader();
+    renderChecklist();
+    renderNc();
+    renderSummary();
+    renderGate();
+    renderSignoffConfirm();
+    if(el.connChip) el.connChip.style.display = "none";
+  }
+
+  async function pollLoop(){
+    if(!started) return;
+    try{
+      var rev = await api("/api/revision");
+      if(el.connChip) el.connChip.style.display = "none";
+      if(trackedRev !== null && rev.revision !== trackedRev && !anyInputFocused()){
+        await loadState();
+      }
+    }catch(e){
+      if(el.connChip){ el.connChip.style.display = "inline-flex"; el.connChip.textContent = "Can't reach the server — retrying…"; }
+    }
+    setTimeout(pollLoop, 4000);
+  }
+
+  async function init(){
+    if(started) return; // lazy-init once, on first tab activation
+    started = true;
+    root.innerHTML = panelSkeleton(cfg);
+    $all("[data-el]", root).forEach(function(node){ el[node.dataset.el] = node; });
+    wireHeaderFields();
+    wireSignoffConfirm();
+    wireReset();
+    try{
+      await loadState();
+    }catch(e){
+      if(el.connChip){ el.connChip.style.display = "inline-flex"; el.connChip.textContent = "Can't reach the server — retrying…"; }
+    }
+    loadHistory();
+    pollLoop();
+  }
+
+  return { init: init };
+}
+
+// ---------------- Live Dashboard (Internal + Glass & Brittle) ----------------
+// Read-only view: no inputs to preserve across refresh, so every refresh is a
+// full re-render rather than the granular renderX() pattern mountAuditConsole
+// uses. Pulls from the existing /state, /history and /revision endpoints —
+// no new backend routes needed.
+function mountDashboard(cfg){
+  var root = cfg.root;
+  var sources = cfg.sources;
+  var started = false;
+  var trackedRev = null;
+
+  async function api(path){
+    var res = await fetch(path);
+    var data = null;
+    try{ data = await res.json(); }catch(e){}
+    if(!res.ok) throw new Error((data && data.error) || ("Request failed (" + res.status + ")"));
+    return data;
+  }
+
+  function fmtPct(x){ return x == null ? "—" : Math.round(x * 100) + "%"; }
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function rateColor(rate){
+    if(rate == null) return "var(--db-faint)";
+    if(rate >= 0.9) return "var(--db-ok)";
+    if(rate >= 0.75) return "var(--db-warn)";
+    return "var(--db-bad)";
+  }
+  function zoneRank(zone){
+    if(zone === "High") return 0;
+    if(zone === "Medium") return 1;
+    if(zone === "Low") return 2;
+    return 3;
+  }
+
+  async function loadAll(){
+    var results = await Promise.all(sources.map(function(s){
+      return Promise.all([ api(s.apiBase + "/state"), api(s.apiBase + "/history") ]);
+    }));
+    return sources.map(function(s, idx){
+      var state = results[idx][0];
+      var history = (results[idx][1] && results[idx][1].history) || [];
+      return {
+        key: s.key,
+        label: s.label,
+        apiBase: s.apiBase,
+        items: state.items || [],
+        auditType: state.auditType || {},
+        history: history.slice().reverse(), // server sends newest-first; chart wants oldest -> newest
+      };
+    });
+  }
+
+  function computeStats(src){
+    var opts = src.auditType.statusOptions || ["S", "U"];
+    var pass = opts[0], fail = "U";
+    var naCode = src.auditType.naStatus || null;
+    var accepted = 0, unacceptable = 0, na = 0, pending = 0;
+    src.items.forEach(function(i){
+      if(i.status === pass) accepted++;
+      else if(i.status === fail) unacceptable++;
+      else if(naCode && i.status === naCode) na++;
+      else pending++;
+    });
+    var reviewed = accepted + unacceptable;
+    var openItems = src.items.filter(function(i){ return i.status === fail; });
+    var capaOptions = src.auditType.capaStatusOptions || ["Open", "In Progress", "Closed"];
+    var capaOpen = 0, capaProgress = 0, capaClosed = 0;
+    openItems.forEach(function(i){
+      var cs = i.capa_status || capaOptions[0];
+      if(cs === capaOptions[2]) capaClosed++;
+      else if(cs === capaOptions[1]) capaProgress++;
+      else capaOpen++;
+    });
+    return {
+      total: src.items.length, accepted: accepted, unacceptable: unacceptable, na: na, pending: pending,
+      reviewed: reviewed, passRate: reviewed > 0 ? accepted / reviewed : null,
+      openItems: openItems, capaOpen: capaOpen, capaProgress: capaProgress, capaClosed: capaClosed,
+    };
+  }
+
+  function renderGauge(rate){
+    var pct = rate == null ? 0 : rate;
+    var r = 74, c = 2 * Math.PI * r;
+    var offset = c * (1 - pct);
+    var color = rateColor(rate);
+    return (
+      '<div style="position:relative; width:172px; height:172px;">' +
+        '<svg width="172" height="172" viewBox="0 0 172 172" style="transform:rotate(-90deg);">' +
+          '<circle cx="86" cy="86" r="' + r + '" fill="none" stroke="var(--db-line-strong)" stroke-width="12"></circle>' +
+          '<circle cx="86" cy="86" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="12" ' +
+            'stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '"></circle>' +
+        '</svg>' +
+        '<div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">' +
+          '<div class="db-mono" style="font-weight:700; font-size:34px; color:#fff; font-variant-numeric:tabular-nums;">' + fmtPct(rate) + '</div>' +
+          '<div class="db-mono" style="font-size:9.5px; letter-spacing:.06em; color:var(--db-faint); text-transform:uppercase; margin-top:2px;">Pass Rate</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderSparkline(history){
+    if(history.length < 2){
+      return '<div class="db-empty">Not enough archived audits yet to plot a trend &mdash; archive at least two.</div>';
+    }
+    var pts = history.map(function(h){
+      var reviewed = (h.accepted || 0) + (h.unacceptable || 0);
+      return reviewed > 0 ? h.accepted / reviewed : null;
+    });
+    var w = 220, hgt = 34, pad = 3;
+    var coords = pts.map(function(p, i){
+      var x = pad + (i * (w - pad * 2)) / (pts.length - 1);
+      var y = p == null ? null : (hgt - pad) - p * (hgt - pad * 2);
+      return { x: x, y: y };
+    });
+    var pathPts = coords.filter(function(pt){ return pt.y != null; });
+    var poly = pathPts.map(function(pt){ return pt.x.toFixed(1) + "," + pt.y.toFixed(1); }).join(" ");
+    var last = pathPts[pathPts.length - 1];
+    var lastRate = pts[pts.length - 1];
+    return (
+      '<svg width="' + w + '" height="' + hgt + '" viewBox="0 0 ' + w + ' ' + hgt + '">' +
+        '<polyline points="' + poly + '" fill="none" stroke="var(--db-accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></polyline>' +
+        (last ? '<circle cx="' + last.x.toFixed(1) + '" cy="' + last.y.toFixed(1) + '" r="2.6" fill="var(--db-accent)"></circle>' : '') +
+      '</svg>'
+    );
+  }
+
+  function render(data){
+    var stats = data.map(computeStats);
+    var totalAccepted = stats.reduce(function(a, s){ return a + s.accepted; }, 0);
+    var totalUnacceptable = stats.reduce(function(a, s){ return a + s.unacceptable; }, 0);
+    var combinedReviewed = totalAccepted + totalUnacceptable;
+    var combinedRate = combinedReviewed > 0 ? totalAccepted / combinedReviewed : null;
+    var totalOpen = stats.reduce(function(a, s){ return a + s.openItems.length; }, 0);
+    var totalCapaOpen = stats.reduce(function(a, s){ return a + s.capaOpen + s.capaProgress; }, 0);
+    var totalCapaClosed = stats.reduce(function(a, s){ return a + s.capaClosed; }, 0);
+
+    var readoutsHtml = data.map(function(src, i){
+      var st = stats[i];
+      return (
+        '<div>' +
+          '<div class="db-rval">' + fmtPct(st.passRate) + '</div>' +
+          '<div class="db-rnote">' + esc(src.label) + ' &middot; ' + st.reviewed + ' of ' + st.total + ' reviewed</div>' +
+        '</div>'
+      );
+    }).join("") +
+    '<div>' +
+      '<div class="db-rval">' + totalOpen + '</div>' +
+      '<div class="db-rnote">Open findings &middot; both programs</div>' +
+    '</div>' +
+    '<div>' +
+      '<div class="db-rval">' + totalCapaOpen + '</div>' +
+      '<div class="db-rnote">CAPA open/in progress &middot; ' + totalCapaClosed + ' closed</div>' +
+    '</div>';
+
+    var progHtml = data.map(function(src, i){
+      var st = stats[i];
+      var pct = st.passRate == null ? 0 : Math.round(st.passRate * 100);
+      return (
+        '<div class="db-prog-row">' +
+          '<div class="db-prog-name">' + esc(src.label) + '</div>' +
+          '<div class="db-track"><div class="db-fill" style="width:' + pct + '%; background:' + rateColor(st.passRate) + ';"></div></div>' +
+          '<div class="db-prog-pct" style="color:' + rateColor(st.passRate) + ';">' + fmtPct(st.passRate) + '</div>' +
+        '</div>'
+      );
+    }).join("");
+
+    var zoneSrcIdx = data.findIndex(function(s){ return s.auditType && s.auditType.hasZoneField; });
+    var zonesHtml;
+    if(zoneSrcIdx === -1){
+      zonesHtml = '<div class="db-empty">No zoned program in this account.</div>';
+    } else {
+      var zsrc = data[zoneSrcIdx];
+      var zstat = stats[zoneSrcIdx];
+      var zoneOptions = zsrc.auditType.zoneOptions || ["High", "Medium", "Low"];
+      var zPass = (zsrc.auditType.statusOptions || ["S", "U"])[0];
+      zonesHtml = '<div class="db-zones">' + zoneOptions.map(function(zoneName){
+        var zItems = zsrc.items.filter(function(i){ return i.zone === zoneName; });
+        var acc = zItems.filter(function(i){ return i.status === zPass; }).length;
+        var un = zItems.filter(function(i){ return i.status === "U"; }).length;
+        var rev = acc + un;
+        var rate = rev > 0 ? acc / rev : null;
+        return (
+          '<div class="db-zone-tile">' +
+            '<div class="db-zn">' + esc(zoneName) + '</div>' +
+            '<div class="db-zled" style="background:' + rateColor(rate) + '; box-shadow:0 0 6px ' + rateColor(rate) + ';"></div>' +
+            '<div class="db-zval">' + fmtPct(rate) + '</div>' +
+          '</div>'
+        );
+      }).join("") + '</div>';
+      void zstat;
+    }
+
+    var findings = [];
+    data.forEach(function(src, i){
+      stats[i].openItems.forEach(function(item){
+        findings.push({ item: item, src: src });
+      });
+    });
+    findings.sort(function(a, b){
+      var za = a.src.auditType.hasZoneField ? zoneRank(a.item.zone) : 3;
+      var zb = b.src.auditType.hasZoneField ? zoneRank(b.item.zone) : 3;
+      if(za !== zb) return za - zb;
+      return (a.item.id || 0) - (b.item.id || 0);
+    });
+    var MAX_FINDINGS = 8;
+    var shown = findings.slice(0, MAX_FINDINGS);
+    var findingsHtml;
+    if(findings.length === 0){
+      findingsHtml = '<div class="db-empty">No open findings on either program right now.</div>';
+    } else {
+      findingsHtml = shown.map(function(f){
+        var item = f.item, src = f.src;
+        var capaOptions = src.auditType.capaStatusOptions || ["Open", "In Progress", "Closed"];
+        var cs = item.capa_status || capaOptions[0];
+        var tagClass = cs === capaOptions[2] ? "closed" : (cs === capaOptions[1] ? "progress" : "open");
+        var metaBits = [esc(src.label), esc(item.section || "")];
+        if(src.auditType.hasZoneField && item.zone) metaBits.push(esc(item.zone) + " zone");
+        return (
+          '<div class="db-log-row">' +
+            '<div class="db-bracket">!</div>' +
+            '<div>' +
+              '<div class="db-log-item">' + esc(item.description || item.text || "Untitled finding") + '</div>' +
+              '<div class="db-log-meta">' + metaBits.join(" &middot; ") + '</div>' +
+            '</div>' +
+            '<div class="db-log-tag ' + tagClass + '">' + esc(cs) + '</div>' +
+          '</div>'
+        );
+      }).join("");
+      if(findings.length > MAX_FINDINGS){
+        findingsHtml += '<div class="db-empty">+ ' + (findings.length - MAX_FINDINGS) + ' more &mdash; see the Non-Conformance Log on each audit tab.</div>';
+      }
+    }
+
+    var trendHtml = data.map(function(src){
+      var hist = src.history;
+      var lastRate = null;
+      if(hist.length){
+        var lastH = hist[hist.length - 1];
+        var rev = (lastH.accepted || 0) + (lastH.unacceptable || 0);
+        lastRate = rev > 0 ? lastH.accepted / rev : null;
+      }
+      return (
+        '<div class="db-spark-row">' +
+          '<div class="db-spark-label">' + esc(src.label) + '</div>' +
+          renderSparkline(hist) +
+          '<div class="db-spark-end" style="color:' + rateColor(lastRate) + ';">' + fmtPct(lastRate) + '</div>' +
+        '</div>'
+      );
+    }).join("");
+
+    var updatedAt = new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+    root.innerHTML =
+      '<div class="db-wrap">' +
+        '<div class="db-top">' +
+          '<div>' +
+            '<h2>Compliance Dashboard</h2>' +
+            '<div class="db-sub">Internal Audit + Glass &amp; Brittle Audit &middot; live from the current checklist</div>' +
+          '</div>' +
+          '<div class="db-status"><span class="db-dot"></span>Live</div>' +
+        '</div>' +
+        '<div class="db-top-grid">' +
+          '<div class="db-panel db-gauge-wrap">' + renderGauge(combinedRate) + '</div>' +
+          '<div class="db-panel">' +
+            '<div class="db-label">At a Glance</div>' +
+            '<div class="db-readouts">' + readoutsHtml + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="db-row2">' +
+          '<div class="db-panel">' +
+            '<div class="db-label">Program Status</div>' +
+            progHtml +
+          '</div>' +
+          '<div class="db-panel">' +
+            '<div class="db-label">Risk Zones &mdash; Glass &amp; Brittle</div>' +
+            zonesHtml +
+          '</div>' +
+        '</div>' +
+        '<div class="db-panel" style="margin-bottom:14px;">' +
+          '<div class="db-label">Priority Findings</div>' +
+          findingsHtml +
+        '</div>' +
+        '<div class="db-panel">' +
+          '<div class="db-label">Trend &mdash; Pass Rate by Archived Audit</div>' +
+          trendHtml +
+        '</div>' +
+        '<div class="db-foot"><span>Updated ' + updatedAt + '</span><span>Refreshes automatically</span></div>' +
+      '</div>';
+  }
+
+  async function loadAndRender(){
+    var data = await loadAll();
+    render(data);
+  }
+
+  async function pollLoop(){
+    if(!started) return;
+    try{
+      var rev = await api("/api/revision");
+      if(rev.revision !== trackedRev){
+        trackedRev = rev.revision;
+        await loadAndRender();
+      }
+    }catch(e){ /* silent — the audit tabs already surface connectivity issues */ }
+    setTimeout(pollLoop, 4000);
+  }
+
+  async function init(){
+    if(started) return; // lazy-init once, on first tab activation
+    started = true;
+    root.innerHTML = '<div class="db-wrap"><div class="db-panel" style="text-align:center; padding:40px;"><div class="db-mono" style="color:var(--db-faint); font-size:12px; letter-spacing:.06em;">LOADING DASHBOARD&hellip;</div></div></div>';
+    try{
+      var revData = await api("/api/revision");
+      trackedRev = revData.revision;
+      await loadAndRender();
+    }catch(e){
+      root.innerHTML = '<div class="db-wrap"><div class="db-panel" style="text-align:center; padding:40px;"><div class="db-mono" style="color:var(--db-bad); font-size:12px;">Couldn&rsquo;t load dashboard data &mdash; ' + esc(e.message) + '</div></div></div>';
+    }
+    pollLoop();
+  }
+
+  return { init: init };
+}
+
+var internalConsole = mountAuditConsole({
+  typeKey: "internal",
+  apiBase: "/api/internal",
+  root: document.getElementById("panel-internal"),
+  docNumber: "VF-0034-00",
+  label: "Internal Audit",
+  passLabel: "Satisfactory",
+  failLabel: "Unsatisfactory",
+  hasNaStatus: true,
+  hasZoneField: false,
+  hasCapaStatus: true,
+});
+
+var glassConsole = mountAuditConsole({
+  typeKey: "glass",
+  apiBase: "/api/glass",
+  root: document.getElementById("panel-glass"),
+  docNumber: "VR-0041-00",
+  label: "Glass & Brittle Audit",
+  passLabel: "Satisfactory",
+  failLabel: "Unsatisfactory",
+  hasNaStatus: true,
+  hasZoneField: true,
+  hasCapaStatus: true,
+  zoneOptions: [["High", "Weekly"], ["Medium", "Monthly"], ["Low", "Quarterly"]],
+});
+
+var dashboardConsole = mountDashboard({
+  root: document.getElementById("panel-dashboard"),
+  sources: [
+    { key: "internal", apiBase: "/api/internal", label: "Internal Audit" },
+    { key: "glass", apiBase: "/api/glass", label: "Glass & Brittle" },
+  ],
+});
+
+document.addEventListener("DOMContentLoaded", wireTabs);
+})();
 </script>
 </body>
 </html>
