@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const Database = require("better-sqlite3");
 const SECTIONS = require("./sections-data");
+const { AUDIT_TYPES, NEW_AUDIT_TYPE_KEYS } = require("./audit-types");
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "..", "data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS settings (
 
 CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  audit_type TEXT NOT NULL DEFAULT 'gmp',
   section TEXT NOT NULL,
   sort_order INTEGER NOT NULL,
   text TEXT NOT NULL,
@@ -56,7 +58,31 @@ CREATE TABLE IF NOT EXISTS items (
   shift INTEGER,
   initials TEXT NOT NULL DEFAULT '',
   photo_filename TEXT,
-  notified_at TEXT
+  notified_at TEXT,
+  zone TEXT NOT NULL DEFAULT '',
+  capa_status TEXT NOT NULL DEFAULT ''
+);
+
+-- Per-audit-type header + sign-off state for the two new audit types
+-- (Internal, Glass & Brittle). GMP keeps using the original settings
+-- table unchanged, so nothing about the live GMP form is touched by this.
+-- Account-level fields (passcode, shift contacts, EmailJS config) stay
+-- solely in the settings table and apply across every audit type.
+CREATE TABLE IF NOT EXISTS audit_type_settings (
+  audit_type TEXT PRIMARY KEY,
+  eyebrow TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  subtitle TEXT NOT NULL DEFAULT '',
+  auditor TEXT NOT NULL DEFAULT '',
+  audit_date TEXT NOT NULL DEFAULT '',
+  qa_initials TEXT NOT NULL DEFAULT '',
+  reviewed_by TEXT NOT NULL DEFAULT '',
+  reviewed_date TEXT NOT NULL DEFAULT '',
+  signoff_confirmed_at TEXT NOT NULL DEFAULT '',
+  review_due TEXT NOT NULL DEFAULT '',
+  revision_date TEXT NOT NULL DEFAULT '',
+  zone_filter TEXT NOT NULL DEFAULT '',
+  revision INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS departments (
@@ -70,6 +96,7 @@ CREATE TABLE IF NOT EXISTS departments (
 -- over time instead of being lost on every reset.
 CREATE TABLE IF NOT EXISTS audit_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  audit_type TEXT NOT NULL DEFAULT 'gmp',
   audit_date TEXT NOT NULL DEFAULT '',
   auditor TEXT NOT NULL DEFAULT '',
   qa_initials TEXT NOT NULL DEFAULT '',
@@ -97,7 +124,9 @@ CREATE TABLE IF NOT EXISTS audit_snapshot_items (
   preventive_measures TEXT NOT NULL DEFAULT '',
   shift INTEGER,
   initials TEXT NOT NULL DEFAULT '',
-  photo_filename TEXT
+  photo_filename TEXT,
+  zone TEXT NOT NULL DEFAULT '',
+  capa_status TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_snapshot_items_snapshot ON audit_snapshot_items(snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_snapshot_items_status ON audit_snapshot_items(status);
@@ -122,6 +151,19 @@ const itemColumns = db.prepare("PRAGMA table_info(items)").all().map((c) => c.na
 if (!itemColumns.includes("notified_at")) {
   db.exec("ALTER TABLE items ADD COLUMN notified_at TEXT");
 }
+// Migration: multi-audit-type support. Every pre-existing row is a GMP
+// item, so backfilling audit_type='gmp' (the column default) needs no
+// explicit UPDATE — existing rows just read back with the default.
+if (!itemColumns.includes("audit_type")) {
+  db.exec("ALTER TABLE items ADD COLUMN audit_type TEXT NOT NULL DEFAULT 'gmp'");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_items_audit_type ON items(audit_type)");
+}
+if (!itemColumns.includes("zone")) {
+  db.exec("ALTER TABLE items ADD COLUMN zone TEXT NOT NULL DEFAULT ''");
+}
+if (!itemColumns.includes("capa_status")) {
+  db.exec("ALTER TABLE items ADD COLUMN capa_status TEXT NOT NULL DEFAULT ''");
+}
 
 // Migration: add EmailJS config + shift lead columns to settings rows created before they existed.
 const settingsColumns = db.prepare("PRAGMA table_info(settings)").all().map((c) => c.name);
@@ -144,6 +186,10 @@ for (const col of ["qa_initials", "content_hash"]) {
     db.exec("ALTER TABLE audit_snapshots ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''");
   }
 }
+if (!snapshotColumns.includes("audit_type")) {
+  db.exec("ALTER TABLE audit_snapshots ADD COLUMN audit_type TEXT NOT NULL DEFAULT 'gmp'");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_snapshots_audit_type ON audit_snapshots(audit_type)");
+}
 const snapshotItemColumns = db.prepare("PRAGMA table_info(audit_snapshot_items)").all().map((c) => c.name);
 for (const col of ["description", "corrective_action", "preventive_measures"]) {
   if (!snapshotItemColumns.includes(col)) {
@@ -153,16 +199,28 @@ for (const col of ["description", "corrective_action", "preventive_measures"]) {
 if (!snapshotItemColumns.includes("photo_filename")) {
   db.exec("ALTER TABLE audit_snapshot_items ADD COLUMN photo_filename TEXT");
 }
+if (!snapshotItemColumns.includes("zone")) {
+  db.exec("ALTER TABLE audit_snapshot_items ADD COLUMN zone TEXT NOT NULL DEFAULT ''");
+}
+if (!snapshotItemColumns.includes("capa_status")) {
+  db.exec("ALTER TABLE audit_snapshot_items ADD COLUMN capa_status TEXT NOT NULL DEFAULT ''");
+}
+
+// Both columns are guaranteed to exist by this point (fresh installs get
+// them from CREATE TABLE, migrated ones from the ALTER TABLE guards above),
+// so these are always safe here regardless of which path created them.
+db.exec("CREATE INDEX IF NOT EXISTS idx_items_audit_type ON items(audit_type)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_snapshots_audit_type ON audit_snapshots(audit_type)");
 
 const settingsRow = db.prepare("SELECT id FROM settings WHERE id = 1").get();
 if (!settingsRow) {
   db.prepare("INSERT INTO settings (id) VALUES (1)").run();
 }
 
-const itemCount = db.prepare("SELECT COUNT(*) AS n FROM items").get().n;
-if (itemCount === 0) {
+const gmpItemCount = db.prepare("SELECT COUNT(*) AS n FROM items WHERE audit_type = 'gmp'").get().n;
+if (gmpItemCount === 0) {
   const insert = db.prepare(
-    "INSERT INTO items (section, sort_order, text) VALUES (?, ?, ?)"
+    "INSERT INTO items (audit_type, section, sort_order, text) VALUES ('gmp', ?, ?, ?)"
   );
   const insertMany = db.transaction((rows) => {
     let order = 0;
@@ -174,6 +232,45 @@ if (itemCount === 0) {
     }
   });
   insertMany(SECTIONS);
+}
+
+// Seed the two new audit types' checklists (idempotent — only fires the
+// first time each type has zero items) and their per-type header/sign-off
+// row in audit_type_settings, from the shared config in audit-types.js.
+const insertPlainItem = db.prepare(
+  "INSERT INTO items (audit_type, section, sort_order, text) VALUES (?, ?, ?, ?)"
+);
+const insertZonedItem = db.prepare(
+  "INSERT INTO items (audit_type, section, sort_order, text, zone) VALUES (?, ?, ?, ?, ?)"
+);
+const seedTypeItems = db.transaction((typeKey, sections, hasZoneField) => {
+  let order = 0;
+  for (const [section, items] of sections) {
+    for (const entry of items) {
+      order += 1;
+      if (hasZoneField) {
+        const [text, zone] = entry;
+        insertZonedItem.run(typeKey, section, order, text, zone || "");
+      } else {
+        insertPlainItem.run(typeKey, section, order, entry);
+      }
+    }
+  }
+});
+const insertTypeSettings = db.prepare(
+  `INSERT INTO audit_type_settings (audit_type, eyebrow, title, subtitle, revision_date)
+   VALUES (?, ?, ?, ?, ?)`
+);
+for (const typeKey of NEW_AUDIT_TYPE_KEYS) {
+  const type = AUDIT_TYPES[typeKey];
+  const count = db.prepare("SELECT COUNT(*) AS n FROM items WHERE audit_type = ?").get(typeKey).n;
+  if (count === 0) {
+    seedTypeItems(typeKey, type.sections, type.hasZoneField);
+  }
+  const settingsExists = db.prepare("SELECT 1 FROM audit_type_settings WHERE audit_type = ?").get(typeKey);
+  if (!settingsExists) {
+    insertTypeSettings.run(typeKey, type.defaults.eyebrow, type.defaults.title, type.defaults.subtitle, type.defaults.revision_date);
+  }
 }
 
 // Seed one department row per checklist section (each section IS a
