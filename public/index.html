@@ -486,6 +486,7 @@ try{ adminPasscode = sessionStorage.getItem("adminPasscode") || null; }catch(e){
 var saveTimers = {};
 var pendingSaveFns = {};
 var armedDeletes = {};
+var armedHistoryDeletes = {};
 
 function $(sel, root){ return (root||document).querySelector(sel); }
 function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
@@ -1516,6 +1517,13 @@ function buildHistoryRow(row){
   toggleBtn.type = "button"; toggleBtn.className = row.signedOff ? "btn ghost admin-only" : "btn";
   toggleBtn.textContent = row.signedOff ? "Correct sign-off" : "Sign Off";
   actions.appendChild(toggleBtn);
+
+  var deleteBtn = document.createElement("button");
+  deleteBtn.type = "button"; deleteBtn.className = "btn ghost admin-only";
+  deleteBtn.textContent = "Delete";
+  deleteBtn.title = "Permanently remove this archived audit — for trial/demo runs that shouldn't count toward trends.";
+  deleteBtn.addEventListener("click", function(){ handleDeleteHistory(row.id, deleteBtn, el); });
+  actions.appendChild(deleteBtn);
   el.appendChild(actions);
 
   var form = document.createElement("div"); form.className = "history-signoff-form";
@@ -1553,6 +1561,29 @@ function buildHistoryRow(row){
   });
 
   return el;
+}
+
+function handleDeleteHistory(id, btn, rowEl){
+  if(armedHistoryDeletes[id]){
+    clearTimeout(armedHistoryDeletes[id]);
+    delete armedHistoryDeletes[id];
+    doDeleteHistory(id, rowEl);
+    return;
+  }
+  btn.textContent = "Confirm delete?"; btn.classList.add("danger-arm");
+  armedHistoryDeletes[id] = setTimeout(function(){
+    delete armedHistoryDeletes[id];
+    btn.textContent = "Delete"; btn.classList.remove("danger-arm");
+  }, 3000);
+}
+
+async function doDeleteHistory(id, rowEl){
+  try{
+    await api("/api/history/" + id, { method: "DELETE" });
+    if(rowEl) rowEl.remove();
+    toast("Archived audit deleted.");
+    if(!$("#historyBody").children.length) loadHistory();
+  }catch(e){ toast("Couldn't delete: " + e.message); }
 }
 
 // ---------------- Init ----------------
@@ -2414,6 +2445,30 @@ function mountAuditConsole(cfg){
     list.forEach(function(row){ body.appendChild(buildHistoryRow(row)); });
   }
 
+  var armedHistoryDeletes = {};
+  function handleDeleteHistory(id, btn, rowEl){
+    if(armedHistoryDeletes[id]){
+      clearTimeout(armedHistoryDeletes[id]);
+      delete armedHistoryDeletes[id];
+      doDeleteHistory(id, rowEl);
+      return;
+    }
+    btn.textContent = "Confirm delete?"; btn.classList.add("danger-arm");
+    armedHistoryDeletes[id] = setTimeout(function(){
+      delete armedHistoryDeletes[id];
+      btn.textContent = "Delete"; btn.classList.remove("danger-arm");
+    }, 3000);
+  }
+
+  async function doDeleteHistory(id, rowEl){
+    try{
+      await api(cfg.apiBase + "/history/" + id, { method: "DELETE" });
+      if(rowEl) rowEl.remove();
+      toast("Archived audit deleted.");
+      if(!el.historyBody.children.length) loadHistory();
+    }catch(e){ toast("Couldn't delete: " + e.message); }
+  }
+
   function buildHistoryRow(row){
     var rowEl = document.createElement("div");
     rowEl.className = "history-row";
@@ -2456,6 +2511,13 @@ function mountAuditConsole(cfg){
     toggleBtn.type = "button"; toggleBtn.className = row.signedOff ? "btn ghost admin-only" : "btn";
     toggleBtn.textContent = row.signedOff ? "Correct sign-off" : "Sign Off";
     actions.appendChild(toggleBtn);
+
+    var deleteBtn = document.createElement("button");
+    deleteBtn.type = "button"; deleteBtn.className = "btn ghost admin-only";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.title = "Permanently remove this archived audit — for trial/demo runs that shouldn't count toward trends.";
+    deleteBtn.addEventListener("click", function(){ handleDeleteHistory(row.id, deleteBtn, rowEl); });
+    actions.appendChild(deleteBtn);
     rowEl.appendChild(actions);
 
     var form = document.createElement("div"); form.className = "history-signoff-form";
