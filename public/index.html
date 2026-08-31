@@ -771,7 +771,6 @@ function buildItemRow(item){
 
   var numEl = document.createElement("div");
   numEl.className = "item-no";
-  numEl.textContent = String(item.id).padStart(2, "0");
 
   var textInput = document.createElement("input");
   textInput.type = "text";
@@ -804,6 +803,15 @@ function buildItemRow(item){
 
   row.appendChild(numEl); row.appendChild(textInput); row.appendChild(toggle); row.appendChild(delBtn);
   return row;
+}
+
+// Renumbers every visible item badge 1..N in on-page order, so the sequence
+// always lines up regardless of database ids left behind by deletions.
+function renumberItemRows(){
+  var n = 1;
+  $all("#checklist .item-no").forEach(function(el){
+    el.textContent = String(n++).padStart(2, "0");
+  });
 }
 
 async function setStatus(id, newStatus){
@@ -859,6 +867,7 @@ async function doDeleteItem(id){
     STATE.items = STATE.items.filter(function(i){ return i.id !== id; });
     var row = $('.item-row[data-item-id="' + id + '"]'); if(row) row.remove();
     var nc = $('.nc-entry[data-item-id="' + id + '"]'); if(nc) nc.remove();
+    renumberItemRows();
     refreshNcEmptyState(); renderSummary(); renderGate();
     toast("Item " + id + " deleted.");
   }catch(e){ toast("Couldn't delete (is Admin unlocked?): " + e.message); }
@@ -889,6 +898,7 @@ function wireAddItemForms(){
           STATE.items.push(res.item);
           card.insertBefore(buildItemRow(res.item), form);
           form.remove();
+          renumberItemRows();
           renderSummary();
           toast("Item " + res.item.id + " added.");
         }catch(e){ toast("Couldn't add item (is Admin unlocked?): " + e.message); }
@@ -1011,6 +1021,7 @@ function renderChecklist(){
   container.appendChild(addSectionBtn);
   wireAddItemForms();
   wireAddSectionForm();
+  renumberItemRows();
 }
 
 // ---------------- Non-Conformance panel ----------------
@@ -2078,7 +2089,6 @@ function mountAuditConsole(cfg){
 
     var numEl = document.createElement("div");
     numEl.className = "item-no";
-    numEl.textContent = String(item.id).padStart(3, "0");
 
     var textWrap = document.createElement("div");
     textWrap.className = "item-text";
@@ -2121,6 +2131,15 @@ function mountAuditConsole(cfg){
 
     row.appendChild(numEl); row.appendChild(textWrap); row.appendChild(toggle); row.appendChild(delBtn);
     return row;
+  }
+
+  // Renumbers every visible item badge 1..N in on-page order, so the sequence
+  // always lines up regardless of database ids left behind by deletions.
+  function renumberItemRows(){
+    var n = 1;
+    $all(".item-no", el.checklist).forEach(function(numEl){
+      numEl.textContent = String(n++).padStart(3, "0");
+    });
   }
 
   async function setStatus(id, newStatus){
@@ -2175,6 +2194,7 @@ function mountAuditConsole(cfg){
       state.items = state.items.filter(function(i){ return i.id !== id; });
       var row = $('.item-row[data-item-id="' + id + '"]', el.checklist); if(row) row.remove();
       var nc = $('.nc-entry[data-item-id="' + id + '"]', el.ncBody); if(nc) nc.remove();
+      renumberItemRows();
       refreshNcEmptyState(); renderSummary(); renderGate();
       toast("Item " + id + " deleted.");
     }catch(e){ toast("Couldn't delete (is Admin unlocked?): " + e.message); }
@@ -2240,6 +2260,7 @@ function mountAuditConsole(cfg){
             state.items.push(res.item);
             card.insertBefore(buildItemRow(res.item), form);
             form.remove();
+            renumberItemRows();
             renderSummary();
             toast("Item " + res.item.id + " added.");
           }catch(e){ toast("Couldn't add item (is Admin unlocked?): " + e.message); }
@@ -2323,6 +2344,7 @@ function mountAuditConsole(cfg){
     applyZoneFilter();
     wireAddItemForms();
     wireAddSectionForm();
+    renumberItemRows();
   }
 
   // ---------------- Non-Conformance panel ----------------
