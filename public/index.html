@@ -224,6 +224,32 @@
   .photo-pick:hover{border-color:var(--accent); color:var(--ink);}
   .photo-remove{border:none; background:transparent; color:var(--bad); font-size:11px; text-decoration:underline;}
   .nc-photo{display:block; margin-top:8px; max-width:100%; border-radius:var(--radius-sm); border:1px solid var(--line);}
+  .photo-gallery{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+  .photo-thumb{position:relative; width:82px; height:82px; border-radius:var(--radius-sm); border:1px solid var(--line); overflow:hidden; flex:0 0 auto;}
+  .photo-thumb img{display:block; width:100%; height:100%; object-fit:cover;}
+  .photo-thumb-remove{position:absolute; top:2px; right:2px; width:18px; height:18px; line-height:16px; text-align:center; border:none; border-radius:50%; background:rgba(0,0,0,.62); color:#fff; font-size:12px; padding:0; cursor:pointer;}
+  .photo-thumb-remove:hover{background:var(--bad);}
+  .photo-count-note{font-size:11px; color:var(--ink-faint); margin-left:2px;}
+  .nc-field-label-row{display:flex; align-items:baseline; justify-content:space-between; gap:8px;}
+  .ai-polish-btn{border:none; background:transparent; color:var(--accent); font-size:10.5px; font-weight:600; padding:0; cursor:pointer; white-space:nowrap; flex:0 0 auto;}
+  .ai-polish-btn:hover{color:var(--accent-strong); text-decoration:underline;}
+  .ai-polish-btn:disabled{color:var(--ink-faint); cursor:default; text-decoration:none;}
+  .ai-draft-field label{margin-bottom:3px;}
+  .ai-draft-row{display:flex; gap:6px; flex-wrap:wrap;}
+  .ai-draft-input{flex:1 1 200px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface-2); padding:6px 8px; font-size:12.3px;}
+  .ai-draft-input:focus{border-color:var(--accent); background:var(--surface);}
+  .ai-draft-btn{border:1px solid var(--accent); background:var(--surface); color:var(--accent); border-radius:var(--radius-sm); font-size:11.5px; font-weight:600; padding:6px 11px; white-space:nowrap;}
+  .ai-draft-btn:hover{background:var(--accent-tint);}
+  .ai-draft-btn:disabled{opacity:0.6; cursor:default;}
+  .ai-suggestion{margin-top:7px; background:var(--accent-tint); border:1px solid var(--accent); border-radius:var(--radius-sm); padding:9px 10px;}
+  .ai-suggestion-label{font-size:9.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent-strong); font-weight:700; margin-bottom:5px;}
+  .ai-suggestion-field{font-size:9.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-faint); font-weight:600; margin-top:7px;}
+  .ai-suggestion-field:first-of-type{margin-top:0;}
+  .ai-suggestion-text{font-size:12.3px; color:var(--ink); line-height:1.45; white-space:pre-wrap; margin-top:2px;}
+  .ai-suggestion-actions{display:flex; gap:12px; margin-top:9px;}
+  .ai-suggestion-use{border:1px solid var(--accent); background:var(--accent); color:var(--accent-ink); border-radius:var(--radius-sm); font-size:11px; font-weight:600; padding:5px 10px;}
+  .ai-suggestion-use:hover{background:var(--accent-strong); border-color:var(--accent-strong);}
+  .ai-suggestion-discard{border:none; background:transparent; color:var(--ink-muted); font-size:11px; padding:5px 4px; text-decoration:underline;}
 
   .signoff-card{border-top:2px solid var(--line); padding:12px 16px; background:var(--surface-2);}
   .signoff-card h3{font-family:var(--font-display); font-size:12.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-muted);}
@@ -584,7 +610,7 @@ async function pollLoop(){
   try{
     var rev = await api("/api/revision");
     hideConnChip();
-    if(STATE && rev.revision !== STATE.settings.revision && !anyInputFocused()){
+    if(STATE && rev.revision !== STATE.settings.revision && !anyInputFocused() && !photoActionInFlight){
       await loadState();
     }
   }catch(e){
@@ -1094,32 +1120,81 @@ function highlightNcEntry(id){
   setTimeout(function(){ entry.classList.remove("nc-highlight"); }, 2600);
 }
 
+var MAX_PHOTOS_PER_ITEM = 10;
+// While true, the background poll skips loadState() so an in-progress photo
+// upload/delete (which does its own optimistic local render) can't be
+// clobbered by a full state reload that was fetched from before it finished.
+var photoActionInFlight = false;
+
+// A background poll can rebuild the whole NC list (a fresh buildNcCard per
+// item) while a multi-photo upload/delete is still in flight for one of
+// those cards — the closed-over `entry` from before the rebuild is then a
+// detached node. Re-resolve the live card by item id before every render so
+// the visible DOM always gets the update, not an orphaned copy of it.
+function currentNcEntry(id, fallbackEntry){
+  var live = $('.nc-entry[data-item-id="' + id + '"]');
+  return (live && live._refs) ? live : fallbackEntry;
+}
+
 async function handlePhotoPick(id, fileInput, entry){
-  var file = fileInput.files && fileInput.files[0];
-  if(!file) return;
-  var formData = new FormData();
-  formData.append("photo", file);
+  var files = fileInput.files ? Array.prototype.slice.call(fileInput.files) : [];
+  if(!files.length) return;
+  var item = STATE.items.find(function(i){ return i.id === id; });
+  photoActionInFlight = true;
   try{
-    var headers = {};
-    if(adminPasscode) headers["X-Admin-Passcode"] = adminPasscode;
-    var res = await fetch("/api/items/" + id + "/photo", { method: "POST", body: formData, headers: headers });
-    var data = await res.json();
-    if(!res.ok) throw new Error(data.error || "Upload failed");
-    var item = STATE.items.find(function(i){ return i.id === id; });
-    item.photo_filename = data.photo_filename;
-    updateNcCardFields(entry, item);
-    toast("Photo attached.");
-  }catch(e){ toast("Couldn't upload photo: " + e.message); }
+    for(var i = 0; i < files.length; i++){
+      if((item.photos || []).length >= MAX_PHOTOS_PER_ITEM){
+        toast("Up to " + MAX_PHOTOS_PER_ITEM + " photos per item — remove one before adding more.");
+        break;
+      }
+      var formData = new FormData();
+      formData.append("photo", files[i]);
+      try{
+        var headers = {};
+        if(adminPasscode) headers["X-Admin-Passcode"] = adminPasscode;
+        var res = await fetch("/api/items/" + id + "/photo", { method: "POST", body: formData, headers: headers });
+        var data = await res.json();
+        if(!res.ok) throw new Error(data.error || "Upload failed");
+        item.photos = data.photos;
+        entry = currentNcEntry(id, entry);
+        renderPhotoGallery(entry, item);
+      }catch(e){ toast("Couldn't upload photo: " + e.message); break; }
+    }
+    toast("Photo(s) attached.");
+  } finally {
+    photoActionInFlight = false;
+  }
   fileInput.value = "";
 }
 
-async function handlePhotoRemove(id, entry){
+async function handlePhotoRemove(id, photoId, entry){
+  photoActionInFlight = true;
   try{
-    await api("/api/items/" + id + "/photo", { method: "DELETE" });
+    var data = await api("/api/items/" + id + "/photo/" + photoId, { method: "DELETE" });
     var item = STATE.items.find(function(i){ return i.id === id; });
-    item.photo_filename = null;
-    updateNcCardFields(entry, item);
-  }catch(e){ toast("Couldn't remove photo: " + e.message); }
+    item.photos = data.photos;
+    entry = currentNcEntry(id, entry);
+    renderPhotoGallery(entry, item);
+  }catch(e){ toast("Couldn't remove photo: " + e.message); } finally {
+    photoActionInFlight = false;
+  }
+}
+
+function renderPhotoGallery(entry, item){
+  var r = entry._refs;
+  var photos = item.photos || [];
+  r.photoGallery.innerHTML = "";
+  photos.forEach(function(photo){
+    var thumb = document.createElement("div"); thumb.className = "photo-thumb";
+    var img = document.createElement("img"); img.src = "/uploads/" + photo.filename; img.alt = "Deviation location photo";
+    var rm = document.createElement("button");
+    rm.type = "button"; rm.className = "photo-thumb-remove no-print"; rm.textContent = "×"; rm.title = "Remove photo";
+    rm.addEventListener("click", function(){ handlePhotoRemove(item.id, photo.id, entry); });
+    thumb.appendChild(img); thumb.appendChild(rm);
+    r.photoGallery.appendChild(thumb);
+  });
+  r.pickLabel.hidden = photos.length >= MAX_PHOTOS_PER_ITEM;
+  r.photoCountNote.textContent = photos.length + "/" + MAX_PHOTOS_PER_ITEM + " photos";
 }
 
 async function handlePickShift(id, slot, entry){
@@ -1143,9 +1218,11 @@ async function handleClearEntry(id){
   }catch(e){ toast("Couldn't clear notes: " + e.message); }
 }
 
-function fieldBlock(entry, item, labelHtml, cls, placeholder, apiKey){
+function fieldBlock(entry, item, labelHtml, cls, placeholder, apiKey, aiField){
   var wrap = document.createElement("div"); wrap.className = "nc-field";
+  var labelRow = document.createElement("div"); labelRow.className = "nc-field-label-row";
   var label = document.createElement("label"); label.innerHTML = labelHtml;
+  labelRow.appendChild(label);
   var input = document.createElement("input");
   input.type = "text"; input.className = cls; input.placeholder = placeholder;
   input.addEventListener("input", function(){
@@ -1157,9 +1234,88 @@ function fieldBlock(entry, item, labelHtml, cls, placeholder, apiKey){
         .catch(function(e){ toast("Couldn't save: " + e.message); });
     });
   });
-  wrap.appendChild(label); wrap.appendChild(input);
+  if(aiField){
+    var polishBtn = document.createElement("button");
+    polishBtn.type = "button"; polishBtn.className = "ai-polish-btn no-print"; polishBtn.textContent = "✨ Polish";
+    polishBtn.title = "Rephrase this note with AI";
+    polishBtn.addEventListener("click", function(){ handleAiRephrase(item, aiField, input, wrap, polishBtn); });
+    labelRow.appendChild(polishBtn);
+  }
+  wrap.appendChild(labelRow); wrap.appendChild(input);
   entry.appendChild(wrap);
   return input;
+}
+
+// Renders an AI suggestion (one field, or several) into `anchorEl` with
+// Use/Discard actions. Nothing from the AI ever lands in a saved field
+// until the auditor explicitly clicks "Use" — this is a compliance record,
+// so AI text is a proposal to review, never a silent auto-fill.
+function showAiSuggestion(anchorEl, fields, onUse){
+  var existing = anchorEl.querySelector(".ai-suggestion");
+  if(existing) existing.remove();
+  var box = document.createElement("div"); box.className = "ai-suggestion";
+  var label = document.createElement("div"); label.className = "ai-suggestion-label";
+  label.textContent = "AI suggestion — review before using";
+  box.appendChild(label);
+  fields.forEach(function(f){
+    if(fields.length > 1){
+      var fl = document.createElement("div"); fl.className = "ai-suggestion-field"; fl.textContent = f.label;
+      box.appendChild(fl);
+    }
+    var t = document.createElement("div"); t.className = "ai-suggestion-text"; t.textContent = f.text;
+    box.appendChild(t);
+  });
+  var actions = document.createElement("div"); actions.className = "ai-suggestion-actions";
+  var useBtn = document.createElement("button");
+  useBtn.type = "button"; useBtn.className = "ai-suggestion-use"; useBtn.textContent = fields.length > 1 ? "Use all" : "Use this";
+  var discardBtn = document.createElement("button");
+  discardBtn.type = "button"; discardBtn.className = "ai-suggestion-discard"; discardBtn.textContent = "Discard";
+  useBtn.addEventListener("click", function(){ onUse(); box.remove(); });
+  discardBtn.addEventListener("click", function(){ box.remove(); });
+  actions.appendChild(useBtn); actions.appendChild(discardBtn);
+  box.appendChild(actions);
+  anchorEl.appendChild(box);
+  return box;
+}
+
+var AI_FIELD_LABELS = { description: "Description / Deviation", corrective_action: "Corrective Action", preventive_measures: "Preventive Measures" };
+
+async function handleAiRephrase(item, field, input, wrap, btn){
+  var currentText = (input.value || "").trim();
+  if(!currentText){ toast("Type a note first, then polish it with AI."); return; }
+  var prevLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = "Polishing…";
+  try{
+    var res = await api("/api/items/" + item.id + "/ai/rephrase", { method: "POST", body: JSON.stringify({ field: field }) });
+    showAiSuggestion(wrap, [{ label: AI_FIELD_LABELS[field] || field, text: res.text }], function(){
+      input.value = res.text;
+      input.dispatchEvent(new Event("input"));
+      toast("Polished text applied — review it before relying on it.");
+    });
+  }catch(e){ toast(e.message || "Couldn't polish that right now."); }
+  btn.disabled = false; btn.textContent = prevLabel;
+}
+
+async function handleAiDraft(item, entry, keywordInput, btn, draftWrap){
+  var keywords = (keywordInput.value || "").trim();
+  if(!keywords){ toast("Type a few keywords describing the issue first."); return; }
+  var prevLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = "Drafting…";
+  try{
+    var res = await api("/api/items/" + item.id + "/ai/draft", { method: "POST", body: JSON.stringify({ keywords: keywords }) });
+    showAiSuggestion(draftWrap, [
+      { label: "Description / Deviation", text: res.description },
+      { label: "Corrective Action", text: res.corrective_action },
+      { label: "Preventive Measures", text: res.preventive_measures }
+    ], function(){
+      var r = entry._refs;
+      r.descInput.value = res.description; r.descInput.dispatchEvent(new Event("input"));
+      r.corrInput.value = res.corrective_action; r.corrInput.dispatchEvent(new Event("input"));
+      r.prevInput.value = res.preventive_measures; r.prevInput.dispatchEvent(new Event("input"));
+      toast("AI draft applied — review it before relying on it.");
+    });
+  }catch(e){ toast(e.message || "Couldn't draft that right now."); }
+  btn.disabled = false; btn.textContent = prevLabel;
 }
 
 function updateAckBadge(entry, initials){
@@ -1187,9 +1343,21 @@ function buildNcCard(item){
   entry.appendChild(head);
   entry._refs.badge = badge;
 
-  entry._refs.descInput = fieldBlock(entry, item, "Description / Deviation", "f-description", "What was found", "description");
-  entry._refs.corrInput = fieldBlock(entry, item, 'Corrective Action <span class="hint">(what was done at the time, incl. Work Order #)</span>', "f-corrective", "Corrective action taken", "corrective_action");
-  entry._refs.prevInput = fieldBlock(entry, item, 'Preventive Measures <span class="hint">(steps to prevent recurrence)</span>', "f-preventive", "Preventive measures", "preventive_measures");
+  var aiDraftWrap = document.createElement("div"); aiDraftWrap.className = "nc-field ai-draft-field no-print";
+  var aiDraftLabel = document.createElement("label"); aiDraftLabel.textContent = "Draft all fields with AI";
+  var aiDraftRow = document.createElement("div"); aiDraftRow.className = "ai-draft-row";
+  var aiDraftInput = document.createElement("input");
+  aiDraftInput.type = "text"; aiDraftInput.className = "ai-draft-input"; aiDraftInput.placeholder = "e.g. wet floor near door 3, slip hazard";
+  var aiDraftBtn = document.createElement("button");
+  aiDraftBtn.type = "button"; aiDraftBtn.className = "ai-draft-btn"; aiDraftBtn.textContent = "✨ Draft";
+  aiDraftBtn.addEventListener("click", function(){ handleAiDraft(item, entry, aiDraftInput, aiDraftBtn, aiDraftWrap); });
+  aiDraftRow.appendChild(aiDraftInput); aiDraftRow.appendChild(aiDraftBtn);
+  aiDraftWrap.appendChild(aiDraftLabel); aiDraftWrap.appendChild(aiDraftRow);
+  entry.appendChild(aiDraftWrap);
+
+  entry._refs.descInput = fieldBlock(entry, item, "Description / Deviation", "f-description", "What was found", "description", "description");
+  entry._refs.corrInput = fieldBlock(entry, item, 'Corrective Action <span class="hint">(what was done at the time, incl. Work Order #)</span>', "f-corrective", "Corrective action taken", "corrective_action", "corrective_action");
+  entry._refs.prevInput = fieldBlock(entry, item, 'Preventive Measures <span class="hint">(steps to prevent recurrence)</span>', "f-preventive", "Preventive measures", "preventive_measures", "preventive_measures");
 
   var shiftWrap = document.createElement("div"); shiftWrap.className = "nc-field";
   var shiftLabel = document.createElement("label"); shiftLabel.textContent = "Shift";
@@ -1220,22 +1388,22 @@ function buildNcCard(item){
   entry._refs.notifyHint = notifyHint;
 
   var photoWrap = document.createElement("div"); photoWrap.className = "nc-field";
-  var photoLabel = document.createElement("label"); photoLabel.textContent = "Photo of Location";
+  var photoLabel = document.createElement("label"); photoLabel.textContent = "Photos of Location (up to " + MAX_PHOTOS_PER_ITEM + ")";
   var photoRow = document.createElement("div"); photoRow.className = "photo-row";
   var pickLabel = document.createElement("label"); pickLabel.className = "photo-pick no-print"; pickLabel.textContent = "Attach photo";
   var fileInput = document.createElement("input");
-  fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.hidden = true;
+  fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.multiple = true; fileInput.hidden = true;
   fileInput.addEventListener("change", function(){ handlePhotoPick(item.id, fileInput, entry); });
   pickLabel.appendChild(fileInput);
-  var removeBtn = document.createElement("button");
-  removeBtn.type = "button"; removeBtn.className = "photo-remove no-print"; removeBtn.textContent = "Remove"; removeBtn.hidden = true;
-  removeBtn.addEventListener("click", function(){ handlePhotoRemove(item.id, entry); });
-  photoRow.appendChild(pickLabel); photoRow.appendChild(removeBtn);
-  var img = document.createElement("img"); img.className = "nc-photo"; img.alt = "Deviation location photo"; img.hidden = true;
-  photoWrap.appendChild(photoLabel); photoWrap.appendChild(photoRow); photoWrap.appendChild(img);
+  var photoCountNote = document.createElement("span"); photoCountNote.className = "photo-count-note";
+  photoRow.appendChild(pickLabel); photoRow.appendChild(photoCountNote);
+  var photoGallery = document.createElement("div"); photoGallery.className = "photo-gallery";
+  photoWrap.appendChild(photoLabel); photoWrap.appendChild(photoRow); photoWrap.appendChild(photoGallery);
   entry.appendChild(photoWrap);
-  entry._refs.img = img;
-  entry._refs.removeBtn = removeBtn;
+  entry._refs.photoGallery = photoGallery;
+  entry._refs.pickLabel = pickLabel;
+  entry._refs.photoCountNote = photoCountNote;
+  renderPhotoGallery(entry, item);
 
   updateNcCardFields(entry, item);
   return entry;
@@ -1249,14 +1417,7 @@ function updateNcCardFields(entry, item){
   setValueIfIdle(r.initialsInput, item.initials);
   entry.dataset.shift = item.shift || "";
   entry.dataset.status = item.status || "";
-  if(item.photo_filename){
-    r.img.src = "/uploads/" + item.photo_filename;
-    r.img.hidden = false;
-    r.removeBtn.hidden = false;
-  } else {
-    r.img.hidden = true;
-    r.removeBtn.hidden = true;
-  }
+  renderPhotoGallery(entry, item);
   updateAckBadge(entry, item.initials);
   if(r.notifyHint && !r.notifyHint.classList.contains("err")){
     r.notifyHint.textContent = recipientPreviewText(item);
@@ -2171,9 +2332,11 @@ function mountAuditConsole(cfg){
     else { badge.textContent = "Awaiting acknowledgment"; badge.classList.remove("done"); }
   }
 
-  function fieldBlock(entry, item, labelHtml, placeholder, apiKey){
+  function fieldBlock(entry, item, labelHtml, placeholder, apiKey, aiField){
     var wrap = document.createElement("div"); wrap.className = "nc-field";
+    var labelRow = document.createElement("div"); labelRow.className = "nc-field-label-row";
     var label = document.createElement("label"); label.innerHTML = labelHtml;
+    labelRow.appendChild(label);
     var input = document.createElement("input");
     input.type = "text"; input.placeholder = placeholder;
     input.addEventListener("input", function(){
@@ -2185,9 +2348,84 @@ function mountAuditConsole(cfg){
           .catch(function(e){ toast("Couldn't save: " + e.message); });
       });
     });
-    wrap.appendChild(label); wrap.appendChild(input);
+    if(aiField){
+      var polishBtn = document.createElement("button");
+      polishBtn.type = "button"; polishBtn.className = "ai-polish-btn no-print"; polishBtn.textContent = "✨ Polish";
+      polishBtn.title = "Rephrase this note with AI";
+      polishBtn.addEventListener("click", function(){ handleAiRephrase(item, aiField, input, wrap, polishBtn); });
+      labelRow.appendChild(polishBtn);
+    }
+    wrap.appendChild(labelRow); wrap.appendChild(input);
     entry.appendChild(wrap);
     return input;
+  }
+
+  function showAiSuggestion(anchorEl, fields, onUse){
+    var existing = anchorEl.querySelector(".ai-suggestion");
+    if(existing) existing.remove();
+    var box = document.createElement("div"); box.className = "ai-suggestion";
+    var label = document.createElement("div"); label.className = "ai-suggestion-label";
+    label.textContent = "AI suggestion — review before using";
+    box.appendChild(label);
+    fields.forEach(function(f){
+      if(fields.length > 1){
+        var fl = document.createElement("div"); fl.className = "ai-suggestion-field"; fl.textContent = f.label;
+        box.appendChild(fl);
+      }
+      var t = document.createElement("div"); t.className = "ai-suggestion-text"; t.textContent = f.text;
+      box.appendChild(t);
+    });
+    var actions = document.createElement("div"); actions.className = "ai-suggestion-actions";
+    var useBtn = document.createElement("button");
+    useBtn.type = "button"; useBtn.className = "ai-suggestion-use"; useBtn.textContent = fields.length > 1 ? "Use all" : "Use this";
+    var discardBtn = document.createElement("button");
+    discardBtn.type = "button"; discardBtn.className = "ai-suggestion-discard"; discardBtn.textContent = "Discard";
+    useBtn.addEventListener("click", function(){ onUse(); box.remove(); });
+    discardBtn.addEventListener("click", function(){ box.remove(); });
+    actions.appendChild(useBtn); actions.appendChild(discardBtn);
+    box.appendChild(actions);
+    anchorEl.appendChild(box);
+    return box;
+  }
+
+  var AI_FIELD_LABELS = { description: "Description / Deviation", corrective_action: "Corrective Action", preventive_measures: "Preventive Measures" };
+
+  async function handleAiRephrase(item, field, input, wrap, btn){
+    var currentText = (input.value || "").trim();
+    if(!currentText){ toast("Type a note first, then polish it with AI."); return; }
+    var prevLabel = btn.textContent;
+    btn.disabled = true; btn.textContent = "Polishing…";
+    try{
+      var res = await api(cfg.apiBase + "/items/" + item.id + "/ai/rephrase", { method: "POST", body: JSON.stringify({ field: field }) });
+      showAiSuggestion(wrap, [{ label: AI_FIELD_LABELS[field] || field, text: res.text }], function(){
+        input.value = res.text;
+        input.dispatchEvent(new Event("input"));
+        toast("Polished text applied — review it before relying on it.");
+      });
+    }catch(e){ toast(e.message || "Couldn't polish that right now."); }
+    btn.disabled = false; btn.textContent = prevLabel;
+  }
+
+  async function handleAiDraft(item, entry, keywordInput, btn, draftWrap){
+    var keywords = (keywordInput.value || "").trim();
+    if(!keywords){ toast("Type a few keywords describing the issue first."); return; }
+    var prevLabel = btn.textContent;
+    btn.disabled = true; btn.textContent = "Drafting…";
+    try{
+      var res = await api(cfg.apiBase + "/items/" + item.id + "/ai/draft", { method: "POST", body: JSON.stringify({ keywords: keywords }) });
+      showAiSuggestion(draftWrap, [
+        { label: "Description / Deviation", text: res.description },
+        { label: "Corrective Action", text: res.corrective_action },
+        { label: "Preventive Measures", text: res.preventive_measures }
+      ], function(){
+        var r = entry._refs;
+        r.descInput.value = res.description; r.descInput.dispatchEvent(new Event("input"));
+        r.corrInput.value = res.corrective_action; r.corrInput.dispatchEvent(new Event("input"));
+        r.prevInput.value = res.preventive_measures; r.prevInput.dispatchEvent(new Event("input"));
+        toast("AI draft applied — review it before relying on it.");
+      });
+    }catch(e){ toast(e.message || "Couldn't draft that right now."); }
+    btn.disabled = false; btn.textContent = prevLabel;
   }
 
   async function handleClearEntry(id){
@@ -2198,33 +2436,82 @@ function mountAuditConsole(cfg){
     }catch(e){ toast("Couldn't clear notes: " + e.message); }
   }
 
+  var MAX_PHOTOS_PER_ITEM = 10;
+  // While true, the background poll skips loadState() so an in-progress photo
+  // upload/delete (which does its own optimistic local render) can't be
+  // clobbered by a full state reload that was fetched from before it finished.
+  var photoActionInFlight = false;
+
+  // A background poll can rebuild the whole NC list (a fresh buildNcCard per
+  // item) while a multi-photo upload/delete is still in flight for one of
+  // those cards — the closed-over `entry` from before the rebuild is then a
+  // detached node. Re-resolve the live card by item id before every render so
+  // the visible DOM always gets the update, not an orphaned copy of it.
+  function currentNcEntry(id, fallbackEntry){
+    var live = $('.nc-entry[data-item-id="' + id + '"]', el.ncBody);
+    return (live && live._refs) ? live : fallbackEntry;
+  }
+
   async function handlePhotoPick(id, fileInput, entry){
-    var file = fileInput.files && fileInput.files[0];
-    if(!file) return;
-    var formData = new FormData();
-    formData.append("photo", file);
+    var files = fileInput.files ? Array.prototype.slice.call(fileInput.files) : [];
+    if(!files.length) return;
+    var item = state.items.find(function(i){ return i.id === id; });
+    photoActionInFlight = true;
     try{
-      var headers = {};
-      var pass = null; try{ pass = sessionStorage.getItem("adminPasscode"); }catch(e){}
-      if(pass) headers["X-Admin-Passcode"] = pass;
-      var res = await fetch(cfg.apiBase + "/items/" + id + "/photo", { method: "POST", body: formData, headers: headers });
-      var data = await res.json();
-      if(!res.ok) throw new Error(data.error || "Upload failed");
-      var item = state.items.find(function(i){ return i.id === id; });
-      item.photo_filename = data.photo_filename;
-      updateNcCardFields(entry, item);
-      toast("Photo attached.");
-    }catch(e){ toast("Couldn't upload photo: " + e.message); }
+      for(var i = 0; i < files.length; i++){
+        if((item.photos || []).length >= MAX_PHOTOS_PER_ITEM){
+          toast("Up to " + MAX_PHOTOS_PER_ITEM + " photos per item — remove one before adding more.");
+          break;
+        }
+        var formData = new FormData();
+        formData.append("photo", files[i]);
+        try{
+          var headers = {};
+          var pass = null; try{ pass = sessionStorage.getItem("adminPasscode"); }catch(e){}
+          if(pass) headers["X-Admin-Passcode"] = pass;
+          var res = await fetch(cfg.apiBase + "/items/" + id + "/photo", { method: "POST", body: formData, headers: headers });
+          var data = await res.json();
+          if(!res.ok) throw new Error(data.error || "Upload failed");
+          item.photos = data.photos;
+          entry = currentNcEntry(id, entry);
+          renderPhotoGallery(entry, item);
+        }catch(e){ toast("Couldn't upload photo: " + e.message); break; }
+      }
+      toast("Photo(s) attached.");
+    } finally {
+      photoActionInFlight = false;
+    }
     fileInput.value = "";
   }
 
-  async function handlePhotoRemove(id, entry){
+  async function handlePhotoRemove(id, photoId, entry){
+    photoActionInFlight = true;
     try{
-      await api(cfg.apiBase + "/items/" + id + "/photo", { method: "DELETE" });
+      var data = await api(cfg.apiBase + "/items/" + id + "/photo/" + photoId, { method: "DELETE" });
       var item = state.items.find(function(i){ return i.id === id; });
-      item.photo_filename = null;
-      updateNcCardFields(entry, item);
-    }catch(e){ toast("Couldn't remove photo: " + e.message); }
+      item.photos = data.photos;
+      entry = currentNcEntry(id, entry);
+      renderPhotoGallery(entry, item);
+    }catch(e){ toast("Couldn't remove photo: " + e.message); } finally {
+      photoActionInFlight = false;
+    }
+  }
+
+  function renderPhotoGallery(entry, item){
+    var r = entry._refs;
+    var photos = item.photos || [];
+    r.photoGallery.innerHTML = "";
+    photos.forEach(function(photo){
+      var thumb = document.createElement("div"); thumb.className = "photo-thumb";
+      var img = document.createElement("img"); img.src = "/uploads/" + photo.filename; img.alt = "Deviation location photo";
+      var rm = document.createElement("button");
+      rm.type = "button"; rm.className = "photo-thumb-remove no-print"; rm.textContent = "×"; rm.title = "Remove photo";
+      rm.addEventListener("click", function(){ handlePhotoRemove(item.id, photo.id, entry); });
+      thumb.appendChild(img); thumb.appendChild(rm);
+      r.photoGallery.appendChild(thumb);
+    });
+    r.pickLabel.hidden = photos.length >= MAX_PHOTOS_PER_ITEM;
+    r.photoCountNote.textContent = photos.length + "/" + MAX_PHOTOS_PER_ITEM + " photos";
   }
 
   function buildNcCard(item){
@@ -2245,9 +2532,21 @@ function mountAuditConsole(cfg){
     entry.appendChild(head);
     entry._refs.badge = badge;
 
-    entry._refs.descInput = fieldBlock(entry, item, "Description / Deviation", "What was found", "description");
-    entry._refs.corrInput = fieldBlock(entry, item, 'Corrective Action <span class="hint">(what was done at the time)</span>', "Corrective action taken", "corrective_action");
-    entry._refs.prevInput = fieldBlock(entry, item, 'Preventive Measures <span class="hint">(steps to prevent recurrence)</span>', "Preventive measures", "preventive_measures");
+    var aiDraftWrap = document.createElement("div"); aiDraftWrap.className = "nc-field ai-draft-field no-print";
+    var aiDraftLabel = document.createElement("label"); aiDraftLabel.textContent = "Draft all fields with AI";
+    var aiDraftRow = document.createElement("div"); aiDraftRow.className = "ai-draft-row";
+    var aiDraftInput = document.createElement("input");
+    aiDraftInput.type = "text"; aiDraftInput.className = "ai-draft-input"; aiDraftInput.placeholder = "e.g. wet floor near door 3, slip hazard";
+    var aiDraftBtn = document.createElement("button");
+    aiDraftBtn.type = "button"; aiDraftBtn.className = "ai-draft-btn"; aiDraftBtn.textContent = "✨ Draft";
+    aiDraftBtn.addEventListener("click", function(){ handleAiDraft(item, entry, aiDraftInput, aiDraftBtn, aiDraftWrap); });
+    aiDraftRow.appendChild(aiDraftInput); aiDraftRow.appendChild(aiDraftBtn);
+    aiDraftWrap.appendChild(aiDraftLabel); aiDraftWrap.appendChild(aiDraftRow);
+    entry.appendChild(aiDraftWrap);
+
+    entry._refs.descInput = fieldBlock(entry, item, "Description / Deviation", "What was found", "description", "description");
+    entry._refs.corrInput = fieldBlock(entry, item, 'Corrective Action <span class="hint">(what was done at the time)</span>', "Corrective action taken", "corrective_action", "corrective_action");
+    entry._refs.prevInput = fieldBlock(entry, item, 'Preventive Measures <span class="hint">(steps to prevent recurrence)</span>', "Preventive measures", "preventive_measures", "preventive_measures");
 
     if(cfg.hasCapaStatus){
       var capaWrap = document.createElement("div"); capaWrap.className = "nc-field";
@@ -2273,22 +2572,22 @@ function mountAuditConsole(cfg){
     entry._refs.initialsInput = fieldBlock(entry, item, "Acknowledgment", "Initials", "initials");
 
     var photoWrap = document.createElement("div"); photoWrap.className = "nc-field";
-    var photoLabel = document.createElement("label"); photoLabel.textContent = "Photo of Location";
+    var photoLabel = document.createElement("label"); photoLabel.textContent = "Photos of Location (up to " + MAX_PHOTOS_PER_ITEM + ")";
     var photoRow = document.createElement("div"); photoRow.className = "photo-row";
     var pickLabel = document.createElement("label"); pickLabel.className = "photo-pick no-print"; pickLabel.textContent = "Attach photo";
     var fileInput = document.createElement("input");
-    fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.hidden = true;
+    fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.multiple = true; fileInput.hidden = true;
     fileInput.addEventListener("change", function(){ handlePhotoPick(item.id, fileInput, entry); });
     pickLabel.appendChild(fileInput);
-    var removeBtn = document.createElement("button");
-    removeBtn.type = "button"; removeBtn.className = "photo-remove no-print"; removeBtn.textContent = "Remove"; removeBtn.hidden = true;
-    removeBtn.addEventListener("click", function(){ handlePhotoRemove(item.id, entry); });
-    photoRow.appendChild(pickLabel); photoRow.appendChild(removeBtn);
-    var img = document.createElement("img"); img.className = "nc-photo"; img.alt = "Deviation location photo"; img.hidden = true;
-    photoWrap.appendChild(photoLabel); photoWrap.appendChild(photoRow); photoWrap.appendChild(img);
+    var photoCountNote = document.createElement("span"); photoCountNote.className = "photo-count-note";
+    photoRow.appendChild(pickLabel); photoRow.appendChild(photoCountNote);
+    var photoGallery = document.createElement("div"); photoGallery.className = "photo-gallery";
+    photoWrap.appendChild(photoLabel); photoWrap.appendChild(photoRow); photoWrap.appendChild(photoGallery);
     entry.appendChild(photoWrap);
-    entry._refs.img = img;
-    entry._refs.removeBtn = removeBtn;
+    entry._refs.photoGallery = photoGallery;
+    entry._refs.pickLabel = pickLabel;
+    entry._refs.photoCountNote = photoCountNote;
+    renderPhotoGallery(entry, item);
 
     updateNcCardFields(entry, item);
     return entry;
@@ -2302,14 +2601,7 @@ function mountAuditConsole(cfg){
     setValueIfIdle(r.initialsInput, item.initials);
     if(r.capaSelect && document.activeElement !== r.capaSelect) r.capaSelect.value = item.capa_status || "Open";
     entry.dataset.status = item.status || "";
-    if(item.photo_filename){
-      r.img.src = "/uploads/" + item.photo_filename;
-      r.img.hidden = false;
-      r.removeBtn.hidden = false;
-    } else {
-      r.img.hidden = true;
-      r.removeBtn.hidden = true;
-    }
+    renderPhotoGallery(entry, item);
     updateAckBadge(entry, item.initials);
   }
 
@@ -2576,7 +2868,7 @@ function mountAuditConsole(cfg){
     try{
       var rev = await api("/api/revision");
       if(el.connChip) el.connChip.style.display = "none";
-      if(trackedRev !== null && rev.revision !== trackedRev && !anyInputFocused()){
+      if(trackedRev !== null && rev.revision !== trackedRev && !anyInputFocused() && !photoActionInFlight){
         await loadState();
       }
     }catch(e){
