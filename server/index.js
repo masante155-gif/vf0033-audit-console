@@ -7,6 +7,16 @@ const sharp = require("sharp");
 const { db, bumpRevision, DATA_DIR } = require("./db");
 const { generatePdf } = require("./pdf");
 const { AUDIT_TYPES, NEW_AUDIT_TYPE_KEYS } = require("./audit-types");
+const { isAiConfigured, rephraseField, draftFromKeywords, AiNotConfiguredError, AiUpstreamError } = require("./ai");
+
+function handleAiError(res, e) {
+  if (e instanceof AiNotConfiguredError) return res.status(503).json({ error: e.message });
+  if (e instanceof AiUpstreamError) return res.status(502).json({ error: e.message });
+  console.error("AI error:", e);
+  return res.status(500).json({ error: "Something went wrong generating that. Try again." });
+}
+
+const AI_NC_FIELDS = ["description", "corrective_action", "preventive_measures"];
 
 const app = express();
 app.set("trust proxy", true);
@@ -18,6 +28,61 @@ function baseUrl(req) {
 }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const MAX_PHOTOS_PER_ITEM = 10;
+
+// ---- Multi-photo helpers --------------------------------------------------
+// Every item (live or archived-snapshot) can carry several photos now,
+// stored one-row-per-photo in item_photos / audit_snapshot_item_photos
+// rather than in a single column. These attach a `.photos` array (each
+// {id, filename}, in upload order) onto rows already fetched elsewhere,
+// batched into one extra query rather than one-per-item.
+function attachPhotos(items) {
+  if (!items.length) return items;
+  const ids = [...new Set(items.map((i) => i.id))];
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db
+    .prepare(`SELECT * FROM item_photos WHERE item_id IN (${placeholders}) ORDER BY item_id ASC, sort_order ASC, id ASC`)
+    .all(...ids);
+  const byItem = new Map();
+  for (const r of rows) {
+    if (!byItem.has(r.item_id)) byItem.set(r.item_id, []);
+    byItem.get(r.item_id).push({ id: r.id, filename: r.filename });
+  }
+  for (const item of items) item.photos = byItem.get(item.id) || [];
+  return items;
+}
+function getItemPhotos(itemId) {
+  return db
+    .prepare("SELECT * FROM item_photos WHERE item_id = ? ORDER BY sort_order ASC, id ASC")
+    .all(itemId)
+    .map((r) => ({ id: r.id, filename: r.filename }));
+}
+function attachSnapshotPhotos(snapshotItems) {
+  if (!snapshotItems.length) return snapshotItems;
+  const ids = snapshotItems.map((i) => i.id);
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db
+    .prepare(
+      `SELECT * FROM audit_snapshot_item_photos WHERE snapshot_item_id IN (${placeholders}) ORDER BY snapshot_item_id ASC, sort_order ASC, id ASC`
+    )
+    .all(...ids);
+  const byItem = new Map();
+  for (const r of rows) {
+    if (!byItem.has(r.snapshot_item_id)) byItem.set(r.snapshot_item_id, []);
+    byItem.get(r.snapshot_item_id).push({ id: r.id, filename: r.filename });
+  }
+  for (const item of snapshotItems) item.photos = byItem.get(item.id) || [];
+  return snapshotItems;
+}
+// Deletes every photo file belonging to the given item_photos rows, then the
+// rows themselves are left for the caller to delete (with the rest of the
+// item, or via a bulk statement) — this only ever touches disk.
+function deleteItemPhotoFiles(photos) {
+  photos.forEach((p) => {
+    const filePath = path.join(DATA_DIR, "uploads", p.filename);
+    fs.existsSync(filePath) && fs.unlinkSync(filePath);
+  });
+}
 
 const SETTINGS_ADMIN_FIELDS = [
   "eyebrow", "title", "subtitle", "review_due", "revision_date",
@@ -37,7 +102,7 @@ function getSettings() {
 // to keep the live GMP form's behavior identical to before that table
 // started holding Internal Audit and Glass & Brittle items too.
 function getItems() {
-  return db.prepare("SELECT * FROM items WHERE audit_type = 'gmp' ORDER BY sort_order ASC").all();
+  return attachPhotos(db.prepare("SELECT * FROM items WHERE audit_type = 'gmp' ORDER BY sort_order ASC").all());
 }
 function getDepartments() {
   return db.prepare("SELECT * FROM departments ORDER BY rowid ASC").all();
@@ -136,12 +201,17 @@ const archiveCurrentAudit = db.transaction(() => {
        (snapshot_id, item_id, section, item_text, status, description, corrective_action, preventive_measures, shift, initials, photo_filename)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
+  const insertSnapshotPhoto = db.prepare(
+    "INSERT INTO audit_snapshot_item_photos (snapshot_item_id, filename, sort_order) VALUES (?, ?, ?)"
+  );
   for (const item of items) {
-    insertItem.run(
+    const photos = item.photos || [];
+    const itemInfo = insertItem.run(
       info.lastInsertRowid, item.id, item.section, item.text, item.status || "",
       item.description || "", item.corrective_action || "", item.preventive_measures || "",
-      item.shift, item.initials || "", item.photo_filename || null
+      item.shift, item.initials || "", (photos[0] && photos[0].filename) || null
     );
+    photos.forEach((p, idx) => insertSnapshotPhoto.run(itemInfo.lastInsertRowid, p.filename, idx));
   }
   return info.lastInsertRowid;
 });
@@ -150,7 +220,7 @@ function getSnapshot(id) {
   return db.prepare("SELECT * FROM audit_snapshots WHERE id = ?").get(id);
 }
 function getSnapshotItems(id) {
-  return db.prepare("SELECT * FROM audit_snapshot_items WHERE snapshot_id = ? ORDER BY id ASC").all(id);
+  return attachSnapshotPhotos(db.prepare("SELECT * FROM audit_snapshot_items WHERE snapshot_id = ? ORDER BY id ASC").all(id));
 }
 // Type-aware: a snapshot's own audit_type tells us which extra fields were
 // folded into its hash at archive time (see computeSnapshotHash above), so
@@ -340,6 +410,56 @@ app.post("/api/items/:id/nc", (req, res) => {
   res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id) });
 });
 
+app.get("/api/ai-status", (req, res) => {
+  res.json({ configured: isAiConfigured() });
+});
+
+// Polish whatever the auditor already typed into one NC field. Never writes
+// to the item itself — the auditor reviews the suggestion client-side and
+// explicitly chooses to use it, same as any other edit to the field.
+app.post("/api/items/:id/ai/rephrase", async (req, res) => {
+  const id = Number(req.params.id);
+  const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = 'gmp'").get(id);
+  if (!item) return res.status(404).json({ error: "Item not found." });
+  const field = (req.body || {}).field;
+  if (!AI_NC_FIELDS.includes(field)) return res.status(400).json({ error: "Unknown field." });
+  const currentText = String(item[field] || "").trim();
+  if (!currentText) return res.status(400).json({ error: "Type a note first, then polish it with AI." });
+  try {
+    const text = await rephraseField({
+      auditLabel: AUDIT_TYPES.gmp.label,
+      sectionLabel: item.section,
+      itemText: item.text,
+      field,
+      currentText,
+    });
+    res.json({ ok: true, text });
+  } catch (e) {
+    handleAiError(res, e);
+  }
+});
+
+// Draft all three NC fields from a short phrase of keywords the auditor
+// jots down on the spot.
+app.post("/api/items/:id/ai/draft", async (req, res) => {
+  const id = Number(req.params.id);
+  const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = 'gmp'").get(id);
+  if (!item) return res.status(404).json({ error: "Item not found." });
+  const keywords = String((req.body || {}).keywords || "").trim();
+  if (!keywords) return res.status(400).json({ error: "Type a few keywords describing the issue first." });
+  try {
+    const drafted = await draftFromKeywords({
+      auditLabel: AUDIT_TYPES.gmp.label,
+      sectionLabel: item.section,
+      itemText: item.text,
+      keywords,
+    });
+    res.json({ ok: true, ...drafted });
+  } catch (e) {
+    handleAiError(res, e);
+  }
+});
+
 function shiftName(settings, slot) {
   if (!slot) return null;
   return settings["shift" + slot + "_name"] || ("Shift " + slot);
@@ -429,15 +549,13 @@ app.post("/api/items/:id/clear", (req, res) => {
   const id = Number(req.params.id);
   const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = 'gmp'").get(id);
   if (!item) return res.status(404).json({ error: "Item not found." });
-  if (item.photo_filename) {
-    const p = path.join(DATA_DIR, "uploads", item.photo_filename);
-    fs.existsSync(p) && fs.unlinkSync(p);
-  }
+  deleteItemPhotoFiles(getItemPhotos(id));
+  db.prepare("DELETE FROM item_photos WHERE item_id = ?").run(id);
   db.prepare(
     "UPDATE items SET description='', corrective_action='', preventive_measures='', initials='', shift=NULL, photo_filename=NULL, notified_at=NULL WHERE id = ?"
   ).run(id);
   bumpRevision();
-  res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id) });
+  res.json({ ok: true, item: Object.assign(db.prepare("SELECT * FROM items WHERE id = ?").get(id), { photos: [] }) });
 });
 
 app.put("/api/items/:id", requireAdmin, (req, res) => {
@@ -471,10 +589,8 @@ app.delete("/api/items/:id", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = 'gmp'").get(id);
   if (!item) return res.status(404).json({ error: "Item not found." });
-  if (item.photo_filename) {
-    const p = path.join(DATA_DIR, "uploads", item.photo_filename);
-    fs.existsSync(p) && fs.unlinkSync(p);
-  }
+  deleteItemPhotoFiles(getItemPhotos(id));
+  db.prepare("DELETE FROM item_photos WHERE item_id = ?").run(id);
   db.prepare("DELETE FROM items WHERE id = ?").run(id);
   bumpRevision();
   res.json({ ok: true });
@@ -515,12 +631,10 @@ app.delete("/api/sections/:name", requireAdmin, (req, res) => {
   const items = db.prepare("SELECT * FROM items WHERE audit_type = 'gmp' AND section = ?").all(name);
   if (items.length === 0) return res.status(404).json({ error: "Section not found." });
   const del = db.transaction(() => {
-    items.forEach((it) => {
-      if (it.photo_filename) {
-        const p = path.join(DATA_DIR, "uploads", it.photo_filename);
-        fs.existsSync(p) && fs.unlinkSync(p);
-      }
-    });
+    items.forEach((it) => deleteItemPhotoFiles(getItemPhotos(it.id)));
+    db.prepare(
+      `DELETE FROM item_photos WHERE item_id IN (${items.map(() => "?").join(",")})`
+    ).run(...items.map((it) => it.id));
     db.prepare("DELETE FROM items WHERE audit_type = 'gmp' AND section = ?").run(name);
     db.prepare("DELETE FROM departments WHERE section = ?").run(name);
   });
@@ -534,45 +648,48 @@ app.post("/api/items/:id/photo", upload.single("photo"), async (req, res) => {
   const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = 'gmp'").get(id);
   if (!item) return res.status(404).json({ error: "Item not found." });
   if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+  const existingCount = db.prepare("SELECT COUNT(*) AS n FROM item_photos WHERE item_id = ?").get(id).n;
+  if (existingCount >= MAX_PHOTOS_PER_ITEM) {
+    return res.status(400).json({ error: "Up to " + MAX_PHOTOS_PER_ITEM + " photos per item." });
+  }
 
   try {
     const filename = crypto.randomUUID() + ".jpg";
     const outPath = path.join(DATA_DIR, "uploads", filename);
     await sharp(req.file.buffer).rotate().resize({ width: 1100, withoutEnlargement: true }).jpeg({ quality: 76 }).toFile(outPath);
 
-    if (item.photo_filename) {
-      const oldPath = path.join(DATA_DIR, "uploads", item.photo_filename);
-      fs.existsSync(oldPath) && fs.unlinkSync(oldPath);
-    }
-    db.prepare("UPDATE items SET photo_filename = ? WHERE id = ?").run(filename, id);
+    const nextOrder = db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM item_photos WHERE item_id = ?").get(id).n;
+    const info = db.prepare("INSERT INTO item_photos (item_id, filename, sort_order) VALUES (?, ?, ?)").run(id, filename, nextOrder);
     bumpRevision();
-    res.json({ ok: true, photo_filename: filename });
+    res.json({ ok: true, photo: { id: info.lastInsertRowid, filename }, photos: getItemPhotos(id) });
   } catch (e) {
     res.status(500).json({ error: "Could not process image: " + e.message });
   }
 });
 
-app.delete("/api/items/:id/photo", (req, res) => {
+app.delete("/api/items/:id/photo/:photoId", (req, res) => {
   const id = Number(req.params.id);
+  const photoId = Number(req.params.photoId);
   const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = 'gmp'").get(id);
   if (!item) return res.status(404).json({ error: "Item not found." });
-  if (item.photo_filename) {
-    const p = path.join(DATA_DIR, "uploads", item.photo_filename);
-    fs.existsSync(p) && fs.unlinkSync(p);
-  }
-  db.prepare("UPDATE items SET photo_filename = NULL WHERE id = ?").run(id);
+  const photo = db.prepare("SELECT * FROM item_photos WHERE id = ? AND item_id = ?").get(photoId, id);
+  if (!photo) return res.status(404).json({ error: "Photo not found." });
+  deleteItemPhotoFiles([photo]);
+  db.prepare("DELETE FROM item_photos WHERE id = ?").run(photoId);
   bumpRevision();
-  res.json({ ok: true });
+  res.json({ ok: true, photos: getItemPhotos(id) });
 });
 
 app.post("/api/reset", (req, res) => {
-  // Photos are archived by reference (audit_snapshot_items.photo_filename)
+  // Photos are archived by reference (copied into audit_snapshot_item_photos)
   // as part of archiveCurrentAudit(), so the underlying files must survive
-  // this reset — clearing them here would silently blank out the photo
-  // evidence in every past PDF. Only the live items table's pointer to the
-  // file is cleared; the file itself stays in DATA_DIR/uploads.
+  // this reset — deleting them here would silently blank out the photo
+  // evidence in every past PDF. Only the live item_photos rows (the pointers
+  // from the now-cleared items to those files) are removed; the files
+  // themselves stay in DATA_DIR/uploads for the archived snapshot to use.
   const snapshotId = archiveCurrentAudit();
 
+  db.prepare("DELETE FROM item_photos WHERE item_id IN (SELECT id FROM items WHERE audit_type = 'gmp')").run();
   db.prepare(
     "UPDATE items SET status='', description='', corrective_action='', preventive_measures='', initials='', shift=NULL, photo_filename=NULL, notified_at=NULL WHERE audit_type = 'gmp'"
   ).run();
@@ -583,9 +700,10 @@ app.post("/api/reset", (req, res) => {
   res.json({ ok: true, archived: snapshotId !== null });
 });
 
-function withPhotoPath(item) {
+function withPhotoPaths(item) {
+  const photos = item.photos || [];
   return Object.assign({}, item, {
-    photo_path: item.photo_filename ? path.join(DATA_DIR, "uploads", item.photo_filename) : null,
+    photo_paths: photos.map((p) => path.join(DATA_DIR, "uploads", p.filename)),
   });
 }
 
@@ -594,7 +712,7 @@ app.get("/api/pdf", (req, res) => {
     snapshots: getAuditSnapshots(10),
     recurringIssues: getRecurringIssues(8),
   };
-  generatePdf(res, { settings: getSettings(), items: getItems().map(withPhotoPath), history });
+  generatePdf(res, { settings: getSettings(), items: getItems().map(withPhotoPaths), history });
 });
 
 function logAmendment(snapshotId, field, oldValue, newValue, changedBy) {
@@ -642,7 +760,7 @@ app.get("/api/history/:id/pdf", (req, res) => {
   const snapshotItems = getSnapshotItems(id);
   const verified = verifySnapshot(snapshot, snapshotItems);
 
-  const items = snapshotItems.map((it) => withPhotoPath({
+  const items = snapshotItems.map((it) => withPhotoPaths({
     id: it.item_id,
     section: it.section,
     text: it.item_text,
@@ -652,7 +770,7 @@ app.get("/api/history/:id/pdf", (req, res) => {
     preventive_measures: it.preventive_measures,
     shift: it.shift,
     initials: it.initials,
-    photo_filename: it.photo_filename,
+    photos: it.photos,
   }));
   const settings = Object.assign({}, getSettings(), {
     auditor: snapshot.auditor,
@@ -705,12 +823,10 @@ app.delete("/api/history/:id", requireAdmin, (req, res) => {
   if (!snapshot || snapshot.audit_type !== "gmp") return res.status(404).json({ error: "Archived audit not found." });
   const snapshotItems = getSnapshotItems(id);
   const del = db.transaction(() => {
-    snapshotItems.forEach((it) => {
-      if (it.photo_filename) {
-        const p = path.join(DATA_DIR, "uploads", it.photo_filename);
-        fs.existsSync(p) && fs.unlinkSync(p);
-      }
-    });
+    snapshotItems.forEach((it) => deleteItemPhotoFiles(it.photos || []));
+    db.prepare(
+      "DELETE FROM audit_snapshot_item_photos WHERE snapshot_item_id IN (SELECT id FROM audit_snapshot_items WHERE snapshot_id = ?)"
+    ).run(id);
     db.prepare("DELETE FROM audit_snapshot_amendments WHERE snapshot_id = ?").run(id);
     db.prepare("DELETE FROM audit_snapshot_items WHERE snapshot_id = ?").run(id);
     db.prepare("DELETE FROM audit_snapshots WHERE id = ?").run(id);
@@ -754,7 +870,7 @@ function getTypeSettings(typeKey) {
   return db.prepare("SELECT * FROM audit_type_settings WHERE audit_type = ?").get(typeKey);
 }
 function getTypeItems(typeKey) {
-  return db.prepare("SELECT * FROM items WHERE audit_type = ? ORDER BY sort_order ASC").all(typeKey);
+  return attachPhotos(db.prepare("SELECT * FROM items WHERE audit_type = ? ORDER BY sort_order ASC").all(typeKey));
 }
 function typeGateOpen(typeKey) {
   const openItems = db.prepare("SELECT initials FROM items WHERE audit_type = ? AND status = 'U'").all(typeKey);
@@ -824,13 +940,18 @@ function archiveTypeAudit(typeKey) {
          (snapshot_id, item_id, section, item_text, status, description, corrective_action, preventive_measures, shift, initials, photo_filename, zone, capa_status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
+    const insertSnapshotPhoto = db.prepare(
+      "INSERT INTO audit_snapshot_item_photos (snapshot_item_id, filename, sort_order) VALUES (?, ?, ?)"
+    );
     for (const item of items) {
-      insertItem.run(
+      const photos = item.photos || [];
+      const itemInfo = insertItem.run(
         info.lastInsertRowid, item.id, item.section, item.text, item.status || "",
         item.description || "", item.corrective_action || "", item.preventive_measures || "",
-        null, item.initials || "", item.photo_filename || null,
+        null, item.initials || "", (photos[0] && photos[0].filename) || null,
         item.zone || "", item.capa_status || ""
       );
+      photos.forEach((p, idx) => insertSnapshotPhoto.run(itemInfo.lastInsertRowid, p.filename, idx));
     }
     return info.lastInsertRowid;
   });
@@ -948,20 +1069,63 @@ app.post("/api/:type/items/:id/nc", requireNewType, (req, res) => {
   res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id) });
 });
 
+// See the GMP /api/items/:id/ai/rephrase and /ai/draft routes above for the
+// rationale — same behavior, scoped to this audit type.
+app.post("/api/:type/items/:id/ai/rephrase", requireNewType, async (req, res) => {
+  const typeKey = req.params.type;
+  const id = Number(req.params.id);
+  const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = ?").get(id, typeKey);
+  if (!item) return res.status(404).json({ error: "Item not found." });
+  const field = (req.body || {}).field;
+  if (!AI_NC_FIELDS.includes(field)) return res.status(400).json({ error: "Unknown field." });
+  const currentText = String(item[field] || "").trim();
+  if (!currentText) return res.status(400).json({ error: "Type a note first, then polish it with AI." });
+  try {
+    const text = await rephraseField({
+      auditLabel: req.auditType.label,
+      sectionLabel: item.section,
+      itemText: item.text,
+      field,
+      currentText,
+    });
+    res.json({ ok: true, text });
+  } catch (e) {
+    handleAiError(res, e);
+  }
+});
+
+app.post("/api/:type/items/:id/ai/draft", requireNewType, async (req, res) => {
+  const typeKey = req.params.type;
+  const id = Number(req.params.id);
+  const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = ?").get(id, typeKey);
+  if (!item) return res.status(404).json({ error: "Item not found." });
+  const keywords = String((req.body || {}).keywords || "").trim();
+  if (!keywords) return res.status(400).json({ error: "Type a few keywords describing the issue first." });
+  try {
+    const drafted = await draftFromKeywords({
+      auditLabel: req.auditType.label,
+      sectionLabel: item.section,
+      itemText: item.text,
+      keywords,
+    });
+    res.json({ ok: true, ...drafted });
+  } catch (e) {
+    handleAiError(res, e);
+  }
+});
+
 app.post("/api/:type/items/:id/clear", requireNewType, (req, res) => {
   const typeKey = req.params.type;
   const id = Number(req.params.id);
   const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = ?").get(id, typeKey);
   if (!item) return res.status(404).json({ error: "Item not found." });
-  if (item.photo_filename) {
-    const p = path.join(DATA_DIR, "uploads", item.photo_filename);
-    fs.existsSync(p) && fs.unlinkSync(p);
-  }
+  deleteItemPhotoFiles(getItemPhotos(id));
+  db.prepare("DELETE FROM item_photos WHERE item_id = ?").run(id);
   db.prepare(
     "UPDATE items SET description='', corrective_action='', preventive_measures='', initials='', capa_status='', photo_filename=NULL WHERE id = ?"
   ).run(id);
   bumpRevision();
-  res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id) });
+  res.json({ ok: true, item: Object.assign(db.prepare("SELECT * FROM items WHERE id = ?").get(id), { photos: [] }) });
 });
 
 // ---- Admin: full checklist editing (item wording, add/delete items and
@@ -1000,10 +1164,8 @@ app.delete("/api/:type/items/:id", requireNewType, requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = ?").get(id, typeKey);
   if (!item) return res.status(404).json({ error: "Item not found." });
-  if (item.photo_filename) {
-    const p = path.join(DATA_DIR, "uploads", item.photo_filename);
-    fs.existsSync(p) && fs.unlinkSync(p);
-  }
+  deleteItemPhotoFiles(getItemPhotos(id));
+  db.prepare("DELETE FROM item_photos WHERE item_id = ?").run(id);
   db.prepare("DELETE FROM items WHERE id = ?").run(id);
   bumpRevision();
   res.json({ ok: true });
@@ -1030,12 +1192,10 @@ app.delete("/api/:type/sections/:name", requireNewType, requireAdmin, (req, res)
   const items = db.prepare("SELECT * FROM items WHERE audit_type = ? AND section = ?").all(typeKey, name);
   if (items.length === 0) return res.status(404).json({ error: "Section not found." });
   const del = db.transaction(() => {
-    items.forEach((it) => {
-      if (it.photo_filename) {
-        const p = path.join(DATA_DIR, "uploads", it.photo_filename);
-        fs.existsSync(p) && fs.unlinkSync(p);
-      }
-    });
+    items.forEach((it) => deleteItemPhotoFiles(getItemPhotos(it.id)));
+    db.prepare(
+      `DELETE FROM item_photos WHERE item_id IN (${items.map(() => "?").join(",")})`
+    ).run(...items.map((it) => it.id));
     db.prepare("DELETE FROM items WHERE audit_type = ? AND section = ?").run(typeKey, name);
   });
   del();
@@ -1049,36 +1209,37 @@ app.post("/api/:type/items/:id/photo", requireNewType, upload.single("photo"), a
   const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = ?").get(id, typeKey);
   if (!item) return res.status(404).json({ error: "Item not found." });
   if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+  const existingCount = db.prepare("SELECT COUNT(*) AS n FROM item_photos WHERE item_id = ?").get(id).n;
+  if (existingCount >= MAX_PHOTOS_PER_ITEM) {
+    return res.status(400).json({ error: "Up to " + MAX_PHOTOS_PER_ITEM + " photos per item." });
+  }
 
   try {
     const filename = crypto.randomUUID() + ".jpg";
     const outPath = path.join(DATA_DIR, "uploads", filename);
     await sharp(req.file.buffer).rotate().resize({ width: 1100, withoutEnlargement: true }).jpeg({ quality: 76 }).toFile(outPath);
 
-    if (item.photo_filename) {
-      const oldPath = path.join(DATA_DIR, "uploads", item.photo_filename);
-      fs.existsSync(oldPath) && fs.unlinkSync(oldPath);
-    }
-    db.prepare("UPDATE items SET photo_filename = ? WHERE id = ?").run(filename, id);
+    const nextOrder = db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM item_photos WHERE item_id = ?").get(id).n;
+    const info = db.prepare("INSERT INTO item_photos (item_id, filename, sort_order) VALUES (?, ?, ?)").run(id, filename, nextOrder);
     bumpRevision();
-    res.json({ ok: true, photo_filename: filename });
+    res.json({ ok: true, photo: { id: info.lastInsertRowid, filename }, photos: getItemPhotos(id) });
   } catch (e) {
     res.status(500).json({ error: "Could not process image: " + e.message });
   }
 });
 
-app.delete("/api/:type/items/:id/photo", requireNewType, (req, res) => {
+app.delete("/api/:type/items/:id/photo/:photoId", requireNewType, (req, res) => {
   const typeKey = req.params.type;
   const id = Number(req.params.id);
+  const photoId = Number(req.params.photoId);
   const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = ?").get(id, typeKey);
   if (!item) return res.status(404).json({ error: "Item not found." });
-  if (item.photo_filename) {
-    const p = path.join(DATA_DIR, "uploads", item.photo_filename);
-    fs.existsSync(p) && fs.unlinkSync(p);
-  }
-  db.prepare("UPDATE items SET photo_filename = NULL WHERE id = ?").run(id);
+  const photo = db.prepare("SELECT * FROM item_photos WHERE id = ? AND item_id = ?").get(photoId, id);
+  if (!photo) return res.status(404).json({ error: "Photo not found." });
+  deleteItemPhotoFiles([photo]);
+  db.prepare("DELETE FROM item_photos WHERE id = ?").run(photoId);
   bumpRevision();
-  res.json({ ok: true });
+  res.json({ ok: true, photos: getItemPhotos(id) });
 });
 
 app.post("/api/:type/reset", requireNewType, (req, res) => {
@@ -1087,6 +1248,7 @@ app.post("/api/:type/reset", requireNewType, (req, res) => {
   // left untouched by a reset (see zone_filter comment on TYPE_OPEN_FIELDS).
   const snapshotId = archiveTypeAudit(typeKey);
 
+  db.prepare("DELETE FROM item_photos WHERE item_id IN (SELECT id FROM items WHERE audit_type = ?)").run(typeKey);
   db.prepare(
     "UPDATE items SET status='', description='', corrective_action='', preventive_measures='', initials='', capa_status='', photo_filename=NULL WHERE audit_type = ?"
   ).run(typeKey);
@@ -1105,7 +1267,7 @@ app.get("/api/:type/pdf", requireNewType, (req, res) => {
   };
   generatePdf(res, {
     settings: getTypeSettings(typeKey),
-    items: getTypeItems(typeKey).map(withPhotoPath),
+    items: getTypeItems(typeKey).map(withPhotoPaths),
     history,
     auditType: req.auditType,
   });
@@ -1133,7 +1295,7 @@ app.get("/api/:type/history/:id/pdf", requireNewType, (req, res) => {
   const snapshotItems = getSnapshotItems(id);
   const verified = verifySnapshot(snapshot, snapshotItems);
 
-  const items = snapshotItems.map((it) => withPhotoPath({
+  const items = snapshotItems.map((it) => withPhotoPaths({
     id: it.item_id,
     section: it.section,
     text: it.item_text,
@@ -1143,7 +1305,7 @@ app.get("/api/:type/history/:id/pdf", requireNewType, (req, res) => {
     preventive_measures: it.preventive_measures,
     shift: it.shift,
     initials: it.initials,
-    photo_filename: it.photo_filename,
+    photos: it.photos,
     zone: it.zone,
     capa_status: it.capa_status,
   }));
@@ -1196,12 +1358,10 @@ app.delete("/api/:type/history/:id", requireNewType, requireAdmin, (req, res) =>
   if (!snapshot || snapshot.audit_type !== req.params.type) return res.status(404).json({ error: "Archived audit not found." });
   const snapshotItems = getSnapshotItems(id);
   const del = db.transaction(() => {
-    snapshotItems.forEach((it) => {
-      if (it.photo_filename) {
-        const p = path.join(DATA_DIR, "uploads", it.photo_filename);
-        fs.existsSync(p) && fs.unlinkSync(p);
-      }
-    });
+    snapshotItems.forEach((it) => deleteItemPhotoFiles(it.photos || []));
+    db.prepare(
+      "DELETE FROM audit_snapshot_item_photos WHERE snapshot_item_id IN (SELECT id FROM audit_snapshot_items WHERE snapshot_id = ?)"
+    ).run(id);
     db.prepare("DELETE FROM audit_snapshot_amendments WHERE snapshot_id = ?").run(id);
     db.prepare("DELETE FROM audit_snapshot_items WHERE snapshot_id = ?").run(id);
     db.prepare("DELETE FROM audit_snapshots WHERE id = ?").run(id);

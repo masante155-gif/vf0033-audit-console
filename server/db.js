@@ -212,6 +212,52 @@ if (!snapshotItemColumns.includes("capa_status")) {
 db.exec("CREATE INDEX IF NOT EXISTS idx_items_audit_type ON items(audit_type)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_snapshots_audit_type ON audit_snapshots(audit_type)");
 
+// Multi-photo support: each item (and each archived snapshot item) can now
+// carry several photos instead of just one. These tables are additive — the
+// old single photo_filename columns above are left in place but the app
+// stops writing to them, so nothing about existing rows breaks. On first
+// creation only, any photo already attached under the old single-photo
+// model is carried forward as photo #1 so upgrading never silently drops
+// evidence that was already there.
+const itemPhotosTableExisted = !!db.prepare(
+  "SELECT name FROM sqlite_master WHERE type='table' AND name='item_photos'"
+).get();
+db.exec(`
+CREATE TABLE IF NOT EXISTS item_photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id INTEGER NOT NULL REFERENCES items(id),
+  filename TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_item_photos_item ON item_photos(item_id);
+`);
+if (!itemPhotosTableExisted) {
+  db.exec(`
+    INSERT INTO item_photos (item_id, filename, sort_order)
+    SELECT id, photo_filename, 0 FROM items WHERE photo_filename IS NOT NULL AND photo_filename != ''
+  `);
+}
+
+const snapshotItemPhotosTableExisted = !!db.prepare(
+  "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_snapshot_item_photos'"
+).get();
+db.exec(`
+CREATE TABLE IF NOT EXISTS audit_snapshot_item_photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  snapshot_item_id INTEGER NOT NULL REFERENCES audit_snapshot_items(id),
+  filename TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_snapshot_item_photos_snap_item ON audit_snapshot_item_photos(snapshot_item_id);
+`);
+if (!snapshotItemPhotosTableExisted) {
+  db.exec(`
+    INSERT INTO audit_snapshot_item_photos (snapshot_item_id, filename, sort_order)
+    SELECT id, photo_filename, 0 FROM audit_snapshot_items WHERE photo_filename IS NOT NULL AND photo_filename != ''
+  `);
+}
+
 const settingsRow = db.prepare("SELECT id FROM settings WHERE id = 1").get();
 if (!settingsRow) {
   db.prepare("INSERT INTO settings (id) VALUES (1)").run();

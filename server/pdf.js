@@ -165,6 +165,71 @@ function drawDeptBars(doc, x, y, w, deptStats) {
   return doc.y;
 }
 
+// A radar chart's labels ring the outside of the circle — past ~16 axes on
+// a Letter-width page they start to collide (Glass & Brittle's ~28 areas
+// is the case that motivated this cap). Below 3 axes there's no shape to
+// read either way. Outside that range the stacked bars above stay the only
+// visual — they scale to any number of rows just fine.
+const MIN_RADAR_AXES = 3;
+const MAX_RADAR_AXES = 16;
+
+// ---- Section radar — a spider/risk-profile chart of pass rate by section.
+// The stacked bars above give the exact numbers; this gives the same data
+// an at-a-glance shape, the way a formal vulnerability-assessment report
+// would (the device is borrowed from that genre of report; the rendering —
+// hairline rings, muted palette, serif-free labels — stays in this report's
+// own ledger register rather than copying another product's look).
+function drawSectionRadar(doc, x, y, w, deptStats, sectionLabel) {
+  const axes = deptStats.filter((d) => d.total > 0);
+  if (axes.length < MIN_RADAR_AXES || axes.length > MAX_RADAR_AXES) return y;
+
+  const n = axes.length;
+  const radius = Math.min(w / 2 - 78, 108);
+  const cx = x + w / 2;
+  const cy = y + radius + 10;
+
+  const angleFor = (i) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
+  const pointAt = (i, frac) => {
+    const a = angleFor(i);
+    return [cx + Math.cos(a) * radius * frac, cy + Math.sin(a) * radius * frac];
+  };
+
+  // Grid rings + spokes, faint.
+  [0.25, 0.5, 0.75, 1].forEach((frac) => {
+    const ringPts = [];
+    for (let i = 0; i < n; i++) ringPts.push(pointAt(i, frac));
+    doc.polygon(...ringPts).lineWidth(0.5).stroke(C.line);
+  });
+  for (let i = 0; i < n; i++) {
+    const [px, py] = pointAt(i, 1);
+    doc.moveTo(cx, cy).lineTo(px, py).lineWidth(0.5).stroke(C.line);
+  }
+
+  // Data shape — colored by the same 90%/70% thresholds the bar rows use,
+  // so a reader who's seen the bars reads this chart's color the same way.
+  const avgRate = axes.reduce((s, d) => s + (d.passRate || 0), 0) / n;
+  const shapeColor = avgRate >= 0.9 ? C.ok : avgRate >= 0.7 ? C.warn : C.bad;
+  const dataPts = axes.map((d, i) => pointAt(i, d.passRate === null ? 0.03 : Math.max(0.03, d.passRate)));
+  doc.polygon(...dataPts).lineWidth(1.3).fillOpacity(0.24).fillAndStroke(shapeColor, shapeColor);
+  doc.fillOpacity(1);
+  dataPts.forEach(([px, py]) => doc.circle(px, py, 2).fill(shapeColor));
+
+  // Axis labels ring the chart, anchored left/right/center by which side
+  // of the circle they fall on so none of them overlap the shape.
+  doc.font("Helvetica").fontSize(7.4).fillColor(C.inkMuted);
+  const boxW = 104;
+  axes.forEach((d, i) => {
+    const a = angleFor(i);
+    const [lx, ly] = pointAt(i, 1);
+    const cos = Math.cos(a);
+    const align = cos > 0.2 ? "left" : cos < -0.2 ? "right" : "center";
+    const tx = align === "left" ? lx + 6 : align === "right" ? lx - boxW - 6 : lx - boxW / 2;
+    doc.text(d.label, tx, ly - 4 + (Math.sin(a) > 0.6 ? 8 : Math.sin(a) < -0.6 ? -14 : 0), { width: boxW, align, lineBreak: false });
+  });
+
+  return cy + radius + 28;
+}
+
 // ---- CAPA status bar — only drawn for audit types that track CAPA status
 // (Internal Audit, Glass & Brittle; GMP has no capa_status field). ---------
 function drawCapaBar(doc, x, y, w, items) {
@@ -507,6 +572,19 @@ function generatePdf(res, { settings, items, history, archiveInfo, auditType }) 
   doc.y = drawDeptBars(doc, MARGIN, doc.y, CONTENT_W, deptStats);
   doc.y += 16;
 
+  // ---- Risk profile (radar) — same data as the bars above, as a shape ----
+  const reviewedSectionCount = deptStats.filter((d) => d.total > 0).length;
+  if (reviewedSectionCount >= MIN_RADAR_AXES && reviewedSectionCount <= MAX_RADAR_AXES) {
+    ensureSpace(doc, 280);
+    doc.font("Helvetica").fontSize(8).fillColor(C.inkFaint).text(
+      "Pass rate by " + type.sectionLabel.toLowerCase() + ", plotted as a risk profile — the larger the shape, the lower the risk.",
+      MARGIN, doc.y, { width: CONTENT_W }
+    );
+    doc.y += 8;
+    doc.y = drawSectionRadar(doc, MARGIN, doc.y, CONTENT_W, deptStats, type.sectionLabel);
+    doc.y += 8;
+  }
+
   // ---- CAPA status --------------------------------------------------------
   // Only for the audit types that track it (Internal, Glass & Brittle) —
   // GMP items have no capa_status field.
@@ -569,23 +647,29 @@ function generatePdf(res, { settings, items, history, archiveInfo, auditType }) 
     const headerH = 16;
     const fieldGap = 2;
 
-    // Photo evidence, if this deviation has one attached — sized to fit
-    // within a modest box inside the card rather than at full resolution.
-    let photoImg = null, photoW = 0, photoH = 0, photoLabelH = 0;
-    if (item.photo_path && fs.existsSync(item.photo_path)) {
-      try {
-        photoImg = doc.openImage(item.photo_path);
-        const maxW = 200, maxH = 150;
-        const scale = Math.min(maxW / photoImg.width, maxH / photoImg.height, 1);
-        photoW = Math.round(photoImg.width * scale);
-        photoH = Math.round(photoImg.height * scale);
-        doc.font("Helvetica-Bold").fontSize(7.6);
-        photoLabelH = doc.heightOfString("PHOTO EVIDENCE", { width: cw });
-      } catch (e) {
-        photoImg = null; // unreadable/missing file on disk — skip silently, text fields still render
-      }
+    // Photo evidence, if this deviation has any attached — rendered as a
+    // small thumbnail grid inside the card rather than at full resolution.
+    const THUMB_W = 90, THUMB_H = 68, THUMB_GAP = 6, THUMB_COLS = 5;
+    let photoImages = [];
+    if (item.photo_paths && item.photo_paths.length) {
+      item.photo_paths.forEach((p) => {
+        if (!fs.existsSync(p)) return;
+        try {
+          photoImages.push(doc.openImage(p));
+        } catch (e) {
+          // unreadable/missing file on disk — skip silently, text fields still render
+        }
+      });
     }
-    const photoBlockH = photoImg ? fieldGap + photoLabelH + 3 + photoH : 0;
+    const photoCols = Math.min(THUMB_COLS, photoImages.length);
+    const photoRows = photoImages.length ? Math.ceil(photoImages.length / photoCols) : 0;
+    const photoGridH = photoImages.length ? photoRows * THUMB_H + (photoRows - 1) * THUMB_GAP : 0;
+    let photoLabelH = 0;
+    if (photoImages.length) {
+      doc.font("Helvetica-Bold").fontSize(7.6);
+      photoLabelH = doc.heightOfString("PHOTO EVIDENCE (" + photoImages.length + ")", { width: cw });
+    }
+    const photoBlockH = photoImages.length ? fieldGap + photoLabelH + 3 + photoGridH : 0;
     const boxH = headerH + descH + fieldGap + caH + fieldGap + pmH + fieldGap + shiftH + photoBlockH + 4;
 
     ensureSpace(doc, boxH + 10);
@@ -612,14 +696,25 @@ function generatePdf(res, { settings, items, history, archiveInfo, auditType }) 
     ly = doc.y + fieldGap;
     doc.font("Helvetica-Bold").fontSize(9).fillColor(C.ink).text(shiftText, cx, ly, { width: cw });
 
-    if (photoImg) {
+    if (photoImages.length) {
       ly = doc.y + fieldGap;
       doc.font("Helvetica-Bold").fontSize(7.6).fillColor(C.inkFaint).text(
-        "PHOTO EVIDENCE", cx, ly, { width: cw, characterSpacing: 0.3, lineBreak: false }
+        "PHOTO EVIDENCE (" + photoImages.length + ")", cx, ly, { width: cw, characterSpacing: 0.3, lineBreak: false }
       );
-      const imgY = doc.y + 3;
-      doc.image(photoImg, cx, imgY, { width: photoW, height: photoH });
-      doc.y = imgY + photoH;
+      const gridY = doc.y + 3;
+      photoImages.forEach((img, idx) => {
+        const col = idx % photoCols;
+        const row = Math.floor(idx / photoCols);
+        const scale = Math.min(THUMB_W / img.width, THUMB_H / img.height, 1);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const cellX = cx + col * (THUMB_W + THUMB_GAP);
+        const cellY = gridY + row * (THUMB_H + THUMB_GAP);
+        const drawX = cellX + (THUMB_W - w) / 2;
+        const drawY = cellY + (THUMB_H - h) / 2;
+        doc.image(img, drawX, drawY, { width: w, height: h });
+      });
+      doc.y = gridY + photoGridH;
     }
 
     doc.y = boxY + boxH + 10;
