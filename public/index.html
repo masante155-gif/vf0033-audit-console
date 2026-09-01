@@ -806,11 +806,23 @@ function buildItemRow(item){
 }
 
 // Renumbers every visible item badge 1..N in on-page order, so the sequence
-// always lines up regardless of database ids left behind by deletions.
+// always lines up regardless of database ids left behind by deletions — and
+// keeps each open Non-Conformance card's "#" badge in sync with that same
+// checklist position, instead of the item's raw (gap-prone) database id.
 function renumberItemRows(){
   var n = 1;
-  $all("#checklist .item-no").forEach(function(el){
-    el.textContent = String(n++).padStart(2, "0");
+  var numbers = {};
+  $all("#checklist .item-row").forEach(function(row){
+    var num = n++;
+    numbers[row.dataset.itemId] = num;
+    var badge = $(".item-no", row);
+    if(badge) badge.textContent = String(num).padStart(2, "0");
+  });
+  $all(".nc-entry", $("#ncBody")).forEach(function(entry){
+    var num = numbers[entry.dataset.itemId];
+    if(!num) return;
+    var badge = $(".nc-num", entry);
+    if(badge) badge.textContent = "#" + num;
   });
 }
 
@@ -837,7 +849,7 @@ function patchItem(updated){
 
   var nc = $('.nc-entry[data-item-id="' + updated.id + '"]');
   if(updated.status === "U"){
-    if(!nc){ nc = buildNcCard(updated); $("#ncBody").appendChild(nc); }
+    if(!nc){ nc = buildNcCard(updated); $("#ncBody").appendChild(nc); renumberItemRows(); }
     else { updateNcCardFields(nc, updated); }
   } else if(nc){
     nc.remove();
@@ -1447,6 +1459,7 @@ function renderNc(){
     body.appendChild(buildNcCard(item));
   });
   refreshNcEmptyState();
+  renumberItemRows();
 }
 
 // ---------------- Summary + gate ----------------
@@ -2134,11 +2147,23 @@ function mountAuditConsole(cfg){
   }
 
   // Renumbers every visible item badge 1..N in on-page order, so the sequence
-  // always lines up regardless of database ids left behind by deletions.
+  // always lines up regardless of database ids left behind by deletions — and
+  // keeps each open Non-Conformance card's "#" badge in sync with that same
+  // checklist position, instead of the item's raw (gap-prone) database id.
   function renumberItemRows(){
     var n = 1;
-    $all(".item-no", el.checklist).forEach(function(numEl){
-      numEl.textContent = String(n++).padStart(3, "0");
+    var numbers = {};
+    $all(".item-row", el.checklist).forEach(function(row){
+      var num = n++;
+      numbers[row.dataset.itemId] = num;
+      var badge = $(".item-no", row);
+      if(badge) badge.textContent = String(num).padStart(3, "0");
+    });
+    $all(".nc-entry", el.ncBody).forEach(function(entry){
+      var num = numbers[entry.dataset.itemId];
+      if(!num) return;
+      var badge = $(".nc-num", entry);
+      if(badge) badge.textContent = "#" + num;
     });
   }
 
@@ -2163,7 +2188,7 @@ function mountAuditConsole(cfg){
 
     var nc = $('.nc-entry[data-item-id="' + updated.id + '"]', el.ncBody);
     if(updated.status === failStatus()){
-      if(!nc){ nc = buildNcCard(updated); el.ncBody.appendChild(nc); }
+      if(!nc){ nc = buildNcCard(updated); el.ncBody.appendChild(nc); renumberItemRows(); }
       else { updateNcCardFields(nc, updated); }
     } else if(nc){
       nc.remove();
@@ -2638,6 +2663,7 @@ function mountAuditConsole(cfg){
       el.ncBody.appendChild(buildNcCard(item));
     });
     refreshNcEmptyState();
+    renumberItemRows();
   }
 
   // ---------------- Summary + gate ----------------
