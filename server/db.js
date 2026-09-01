@@ -351,6 +351,123 @@ if (!hasNewInternalSections) {
   appendInternalSections(AUDIT_TYPES.internal.sections, maxInternalOrder);
 }
 
+// One-time consolidation migration: now that the area-based sections above
+// cover the whole plant, most of the original 9 generic categories just
+// duplicate content that now lives in a more specific area section (or is
+// already covered weekly by the separate GMP Workplace Audit's "Employee
+// Practices" section). This migration:
+//   1. Deletes 7 categories outright — confirmed to carry zero recorded
+//      inspection data, and fully superseded elsewhere.
+//   2. Deletes 3 bathroom items from "Facility & Structural Conditions" —
+//      duplicated by the new Restroom sections — and adds one item that had
+//      no home anywhere (pest-entry sealing), keeping the rest of that
+//      section as a deliberate, permanent, plant-wide (non-area) section.
+//   3. Deletes 6 redundant items from "Production Line / Equipment
+//      Sanitation" and RELOCATES (UPDATEs the section/sort_order of) the 4
+//      that survive into "Production Line 1" — an UPDATE, not a
+//      delete+reinsert, specifically so any real status/initials/corrective
+//      action already recorded on those rows carries over untouched. The old
+//      category then has zero items left and simply stops appearing.
+//   4. Adds a handful of items (security plan, ingredient-lot traceability,
+//      QA manual, pest-control PROGRAM documentation, wood pallet/transport
+//      condition) that had real content but no section to live in, onto the
+//      existing "Programs, Records & Policy Compliance" and "General
+//      Warehouse" sections.
+// Every one of these steps only deletes items confirmed to carry no status,
+// description, corrective action, preventive measures, or initials — real
+// data is only ever relocated (section changed in place), never deleted.
+// Gated on whether the "Personnel GMP Compliance" category (deleted by step
+// 1, below) still has any items — a structural check, not a text match: one
+// of the very items this migration adds ("Does the plant have a security
+// plan in place?") happens to already exist verbatim in the pre-consolidation
+// data, so using that text as the landmark would falsely read as "already
+// done" and skip the whole migration on every boot.
+const consolidationDone =
+  !db.prepare("SELECT 1 FROM items WHERE audit_type = 'internal' AND section = 'Personnel GMP Compliance'").get() &&
+  db.prepare("SELECT 1 FROM items WHERE audit_type = 'internal'").get();
+if (!consolidationDone) {
+  const delByText = db.prepare(
+    "DELETE FROM items WHERE audit_type = 'internal' AND section = ? AND text = ?"
+  );
+  const maxOrder = (section) =>
+    db
+      .prepare("SELECT COALESCE(MAX(sort_order), 0) AS m FROM items WHERE audit_type = 'internal' AND section = ?")
+      .get(section).m;
+
+  const consolidateInternal = db.transaction(() => {
+    // 1. Delete the 6 fully-redundant categories.
+    const deadCategories = [
+      "Personnel GMP Compliance",
+      "Sanitation & Housekeeping Practices",
+      "Documentation / Records / Policies",
+      "Traceability & QA Systems",
+      "Maintenance & Utilities Controls",
+      "Exterior & Grounds Sanitation",
+      "Pest Control & Facility Integrity",
+    ];
+    const delCategory = db.prepare("DELETE FROM items WHERE audit_type = 'internal' AND section = ?");
+    deadCategories.forEach((section) => delCategory.run(section));
+
+    // 2. Trim "Facility & Structural Conditions" to its plant-wide content.
+    [
+      "Are toilets and washrooms clean and orderly, adequately ventilated to the outside, physically separated from the processing areas, and properly equipped?",
+      "Employee bathrooms are clean and equipped with sanitary paper, antiseptic soap, and towels or air dryers for hands. Hand-washing sinks do not require activation through the use of hands.",
+      "Are hand-washing signs posted?",
+    ].forEach((t) => delByText.run("Facility & Structural Conditions", t));
+    let order = maxOrder("Facility & Structural Conditions");
+    insertPlainItem.run(
+      "internal",
+      "Facility & Structural Conditions",
+      ++order,
+      "Are all doors, windows, and other wall/ceiling openings properly screened or sealed to prevent pest entry, with cracks and crevices caulked or repaired?"
+    );
+
+    // 3. Trim old "Production Line / Equipment Sanitation" and relocate the
+    //    4 items with real content (2 of which carry real recorded data)
+    //    into "Production Line 1".
+    [
+      "Filler room not used for storage.",
+      "Are the fillers, cappers, hoppers, conveyors, bins, and chutes clean?",
+      "Fill control is adequate to ensure that product average fill weights are at or above printed label declarations, and that gross under-fills are removed from the lines.",
+      "Are non-food supplies stored in a separate area away from finished product?",
+      "Incoming materials are free of damage or contamination?",
+      "Storage areas are free of strong odors which may be observed by food products.",
+    ].forEach((t) => delByText.run("Production Line / Equipment Sanitation", t));
+    const relocateToPL1 = db.prepare(
+      "UPDATE items SET section = 'Production Line 1', sort_order = ? WHERE audit_type = 'internal' AND section = 'Production Line / Equipment Sanitation' AND text = ?"
+    );
+    let plOrder = maxOrder("Production Line 1");
+    [
+      "Are all pipe connections and transfer hose connections leak free?",
+      "All chemical spray bottles are labeled correctly and capped.",
+      "Hand sink is clean, towels and soap are available. And warm water is working",
+      "No busted light, no broken covers, free from infestation.",
+    ].forEach((t) => relocateToPL1.run(++plOrder, t));
+
+    // 4. Add the remaining unique content to existing sections.
+    let programOrder = maxOrder("Programs, Records & Policy Compliance");
+    [
+      "Does the plant have a security plan in place?",
+      "Is finished product traceable to the ingredient lot?",
+      "Does the company have a QA manual that includes sampling plans and specifications for raw materials, packaging materials, and finished products?",
+      "Is there a documented pest-control program, including rodents, birds, and insects, with service documentation signed off and followed up by management?",
+      "Are examinations of traps and bait boxes documented, with a current map of trap and bait box locations available for review?",
+      "Are UV traps functioning properly and cleaned regularly?",
+      "Is interior and exterior trap inspection conducted at least monthly, with inspection date and inspector's initials noted at each device?",
+      "Does pesticide-usage documentation include product name, EPA registration number, quantity used, areas treated, operator's name and license number, application method and rate, date treated, and copies of FDA approval and current company insurance?",
+      "Is there a documented preventive-maintenance program in place, free of temporary tape, wire, or cardboard repairs?",
+    ].forEach((t) => insertPlainItem.run("internal", "Programs, Records & Policy Compliance", ++programOrder, t));
+
+    let warehouseOrder = maxOrder("General Warehouse");
+    [
+      "Are wood pallets maintained in good condition to prevent contamination or damage to ingredients, packaging, and product?",
+      "Are non-food supplies stored in a separate area away from finished product?",
+      "Is equipment used in transporting or moving raw and finished goods clean and in good working order?",
+    ].forEach((t) => insertPlainItem.run("internal", "General Warehouse", ++warehouseOrder, t));
+  });
+  consolidateInternal();
+}
+
 // Seed one department row per checklist section (each section IS a
 // department). Idempotent, so it also fills in any section added later.
 const deptInsert = db.prepare("INSERT OR IGNORE INTO departments (section) VALUES (?)");
