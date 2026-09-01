@@ -319,6 +319,38 @@ for (const typeKey of NEW_AUDIT_TYPE_KEYS) {
   }
 }
 
+// One-time additive migration: the Internal Audit checklist was
+// restructured from 9 generic compliance categories into area-based
+// sections that walk the whole plant (see internal-sections-data.js). The
+// seed-on-empty path above only ever fires once per type, and this database
+// already has the original 92 items — some already marked up with real
+// inspection statuses and a handful of real Non-Conformance write-ups — so
+// simply changing the source file wouldn't touch a live database, and a
+// destructive re-seed would erase that real data. Instead this appends the
+// new sections' items after whatever's already there, leaving every
+// existing item (and its status/NC fields) completely untouched. Gated on a
+// landmark new section name so it only ever runs once; the old categories
+// stay in place until removed by hand from the app's admin panel (Delete
+// section), same as any other section.
+const hasNewInternalSections = db
+  .prepare("SELECT 1 FROM items WHERE audit_type = 'internal' AND section = ?")
+  .get("Entrance / Visitor Check-in");
+if (!hasNewInternalSections) {
+  const maxInternalOrder = db
+    .prepare("SELECT COALESCE(MAX(sort_order), 0) AS m FROM items WHERE audit_type = 'internal'")
+    .get().m;
+  const appendInternalSections = db.transaction((sections, startOrder) => {
+    let order = startOrder;
+    for (const [section, sectionItems] of sections) {
+      for (const text of sectionItems) {
+        order += 1;
+        insertPlainItem.run("internal", section, order, text);
+      }
+    }
+  });
+  appendInternalSections(AUDIT_TYPES.internal.sections, maxInternalOrder);
+}
+
 // Seed one department row per checklist section (each section IS a
 // department). Idempotent, so it also fills in any section added later.
 const deptInsert = db.prepare("INSERT OR IGNORE INTO departments (section) VALUES (?)");
