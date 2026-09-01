@@ -354,7 +354,7 @@ function drawStatusIcon(doc, cx, cy, status, passStatus, failStatus, naStatus) {
 }
 
 // ---- Full checklist appendix — every item, grouped by department ---------
-function drawFullChecklist(doc, deptStats, passStatus, failStatus, naStatus) {
+function drawFullChecklist(doc, deptStats, passStatus, failStatus, naStatus, itemNumbers) {
   const textX = MARGIN + 22;
   const textW = CONTENT_W - 22;
 
@@ -367,7 +367,7 @@ function drawFullChecklist(doc, deptStats, passStatus, failStatus, naStatus) {
     doc.y += 9;
 
     dept.items.forEach((item) => {
-      const label = "#" + item.id + " — " + item.text;
+      const label = "#" + itemNumbers.get(item.id) + " — " + item.text;
       doc.font("Helvetica").fontSize(8.4);
       const textH = doc.heightOfString(label, { width: textW });
       const rowH = Math.max(13, textH) + 4;
@@ -490,6 +490,16 @@ function generatePdf(res, { settings, items, history, archiveInfo, auditType }) 
   const naCount = naStatus ? items.filter((i) => i.status === naStatus).length : 0;
   const notReviewed = total - passed - unacceptable - naCount;
   const deptStats = groupBySection(items, passStatus, failStatus);
+
+  // Sequential 1..N numbering in the same section-grouped order the UI
+  // renders items in, so PDF item numbers always line up with the on-screen
+  // badges — regardless of gaps left in the underlying database ids by past
+  // deletions.
+  const itemNumbers = new Map();
+  {
+    let n = 1;
+    deptStats.forEach((dept) => { dept.items.forEach((item) => { itemNumbers.set(item.id, n++); }); });
+  }
 
   // ---- Header band -------------------------------------------------------
   // A plain formal masthead — a thin accent rule, a serif title, and the
@@ -676,7 +686,7 @@ function generatePdf(res, { settings, items, history, archiveInfo, auditType }) 
     const boxY = doc.y;
     doc.rect(MARGIN, boxY, 3, boxH).fill(C.bad);
 
-    doc.font("Helvetica-Bold").fontSize(10.5).fillColor(C.ink).text("#" + item.id + "  " + shortLabel(item.section), cx, boxY, { width: cw - 90 });
+    doc.font("Helvetica-Bold").fontSize(10.5).fillColor(C.ink).text("#" + itemNumbers.get(item.id) + "  " + shortLabel(item.section), cx, boxY, { width: cw - 90 });
 
     const badgeText = acknowledged ? "ACKNOWLEDGED" : "NOT ACKNOWLEDGED";
     const badgeColor = acknowledged ? C.ok : C.warn;
@@ -723,7 +733,7 @@ function generatePdf(res, { settings, items, history, archiveInfo, auditType }) 
   // ---- Full Checklist Appendix ----------------------------------------------
   doc.addPage();
   doc.y = sectionHeading(doc, "Full Checklist (all " + total + " items)", MARGIN);
-  drawFullChecklist(doc, deptStats, passStatus, failStatus, naStatus);
+  drawFullChecklist(doc, deptStats, passStatus, failStatus, naStatus, itemNumbers);
 
   // ---- Audit Trend ------------------------------------------------------------
   doc.addPage();
