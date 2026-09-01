@@ -807,8 +807,10 @@ function buildItemRow(item){
 
 // Renumbers every visible item badge 1..N in on-page order, so the sequence
 // always lines up regardless of database ids left behind by deletions — and
-// keeps each open Non-Conformance card's "#" badge in sync with that same
-// checklist position, instead of the item's raw (gap-prone) database id.
+// keeps each open Non-Conformance card's "#" badge, plus the sign-off gate's
+// "waiting on item(s) #..." message, in sync with that same checklist
+// position instead of the item's raw (gap-prone) database id.
+var itemPositions = {};
 function renumberItemRows(){
   var n = 1;
   var numbers = {};
@@ -818,12 +820,14 @@ function renumberItemRows(){
     var badge = $(".item-no", row);
     if(badge) badge.textContent = String(num).padStart(2, "0");
   });
+  itemPositions = numbers;
   $all(".nc-entry", $("#ncBody")).forEach(function(entry){
     var num = numbers[entry.dataset.itemId];
     if(!num) return;
     var badge = $(".nc-num", entry);
     if(badge) badge.textContent = "#" + num;
   });
+  renderGate();
 }
 
 async function setStatus(id, newStatus){
@@ -1480,7 +1484,8 @@ function renderSummary(){
 
 function renderGate(){
   var openItems = STATE.items.filter(function(i){ return i.status === "U"; });
-  var pending = openItems.filter(function(i){ return !i.initials || !i.initials.trim(); }).map(function(i){ return i.id; });
+  var pending = openItems.filter(function(i){ return !i.initials || !i.initials.trim(); })
+    .map(function(i){ return itemPositions[i.id] || i.id; });
   var card = $("#signoffCard"), gate = $("#signoffGate");
   var pendingChip = $("#chipPending"), pendingNum = $("#chipPendingNum");
   if(pending.length === 0){
@@ -2148,8 +2153,10 @@ function mountAuditConsole(cfg){
 
   // Renumbers every visible item badge 1..N in on-page order, so the sequence
   // always lines up regardless of database ids left behind by deletions — and
-  // keeps each open Non-Conformance card's "#" badge in sync with that same
-  // checklist position, instead of the item's raw (gap-prone) database id.
+  // keeps each open Non-Conformance card's "#" badge, plus the sign-off
+  // gate's "waiting on item(s) #..." message, in sync with that same
+  // checklist position instead of the item's raw (gap-prone) database id.
+  var itemPositions = {};
   function renumberItemRows(){
     var n = 1;
     var numbers = {};
@@ -2159,12 +2166,14 @@ function mountAuditConsole(cfg){
       var badge = $(".item-no", row);
       if(badge) badge.textContent = String(num).padStart(3, "0");
     });
+    itemPositions = numbers;
     $all(".nc-entry", el.ncBody).forEach(function(entry){
       var num = numbers[entry.dataset.itemId];
       if(!num) return;
       var badge = $(".nc-num", entry);
       if(badge) badge.textContent = "#" + num;
     });
+    renderGate();
   }
 
   async function setStatus(id, newStatus){
@@ -2687,7 +2696,8 @@ function mountAuditConsole(cfg){
 
   function renderGate(){
     var openItems = state.items.filter(function(i){ return i.status === failStatus(); });
-    var pending = openItems.filter(function(i){ return !i.initials || !i.initials.trim(); }).map(function(i){ return i.id; });
+    var pending = openItems.filter(function(i){ return !i.initials || !i.initials.trim(); })
+      .map(function(i){ return itemPositions[i.id] || i.id; });
     var card = el.signoffCard, gate = el.signoffGate;
     if(pending.length === 0){
       card.classList.remove("locked"); gate.classList.remove("locked"); gate.classList.add("open");
