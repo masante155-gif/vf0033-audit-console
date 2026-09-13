@@ -1,4 +1,4 @@
-# VF-0033 GMP Audit 
+# VF-0033 Audit Console
 
 A GMP weekly workplace inspection audit tool — 99-item checklist, live Non-Conformance Log, shift-supervisor acknowledgment gate before SQF sign-off, photo attachments, PDF export, and admin-editable checklist/settings.
 
