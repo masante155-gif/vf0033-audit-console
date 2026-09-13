@@ -266,6 +266,57 @@
   .signoff-card.confirmed .signoff-fields{display:none;}
   .signoff-card.confirmed .signoff-confirmed{display:flex;}
 
+  /* ---- Weekly training gate, embedded in the Daily Safety Walk's Sign-Off card ---- */
+  .training-gate:empty{display:none;}
+  .training-gate-card{border:1px solid var(--accent); background:var(--accent-tint); border-radius:var(--radius-sm); padding:13px 15px; margin-bottom:12px;}
+  .training-gate-head{display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:8px;}
+  .training-gate-badge{font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); background:var(--surface); border-radius:999px; padding:3px 9px;}
+  .training-gate-label{font-size:11px; font-weight:600; color:var(--accent-strong); text-transform:uppercase; letter-spacing:.03em;}
+  .training-gate-prompt{font-size:13.5px; font-weight:600; color:var(--ink); margin:0 0 11px;}
+  .training-gate-options{display:flex; flex-direction:column; gap:6px; margin-bottom:12px;}
+  .training-gate-option{display:flex; align-items:flex-start; gap:9px; text-align:left; border:1px solid var(--line); background:var(--surface); border-radius:var(--radius-sm); padding:8px 11px; font-size:13px; color:var(--ink); width:100%;}
+  .training-gate-option:hover{border-color:var(--accent);}
+  .training-gate-option .opt-letter{font-family:var(--font-mono); font-weight:700; color:var(--ink-muted); flex-shrink:0;}
+  .training-gate-option.selected{border-color:var(--accent); background:var(--accent-tint);}
+  .training-gate-option.selected .opt-letter{color:var(--accent);}
+  .training-gate-respondent{display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;}
+  .training-gate-respondent .field{min-width:120px;}
+  .training-gate-done{display:flex; align-items:center; gap:9px; background:var(--ok-tint); color:var(--ok); border:1px solid var(--ok-line); border-radius:var(--radius-sm); padding:9px 12px; font-size:12.5px; margin-bottom:12px;}
+  .training-gate-done b{color:inherit;}
+  .training-gate-check{display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:999px; background:var(--ok); color:#fff; font-size:11px; flex:none;}
+
+  /* Weekly training question bank + response history — admin-only sections
+     living at the bottom of the Daily Safety Walk tab (formerly their own
+     "Safety & Food Culture Training" tab). Unscoped (the old versions of
+     these rules were scoped to #panel-training) since .tqadmin-panel now
+     lives inside #panel-safety and visibility is handled entirely by the
+     shared .admin-panel class. */
+  .tqadmin-panel .tqadmin-sub{color:var(--ink-muted); font-size:12.5px; margin:-4px 0 14px;}
+  .tqadmin-list{display:flex; flex-direction:column; gap:10px; margin-bottom:18px;}
+  .tqadmin-row{border:1px solid var(--line); border-radius:var(--radius-sm); padding:11px 13px; background:var(--surface-2);}
+  .tqadmin-row.inactive{opacity:.55;}
+  .tqadmin-row-top{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; flex-wrap:wrap;}
+  .tqadmin-cat{font-family:var(--font-mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-muted);}
+  .tqadmin-actions{display:flex; gap:6px;}
+  .tqadmin-actions button{font-size:11.5px; padding:4px 9px; border-radius:var(--radius-sm); border:1px solid var(--line); background:var(--surface); color:var(--ink-muted);}
+  .tqadmin-actions button:hover{border-color:var(--accent); color:var(--ink);}
+  .tqadmin-actions button.danger{color:var(--bad);}
+  .tqadmin-field{width:100%; border:1px solid var(--line); border-radius:4px; padding:6px 8px; margin-bottom:6px; font-size:13px; background:var(--surface); color:var(--ink);}
+  .tqadmin-field.tqadmin-prompt{font-weight:600;}
+  .tqadmin-opt-row{display:flex; align-items:center; gap:6px; margin-bottom:5px;}
+  .tqadmin-opt-row label{font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--ink-muted); width:16px; flex-shrink:0;}
+  .tqadmin-opt-row input[type="radio"]{flex-shrink:0;}
+  .tqadmin-explain{width:100%; border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:12.5px; color:var(--ink-muted); background:var(--surface); min-height:44px; resize:vertical;}
+  .tqadmin-add{border-top:1px dashed var(--line-strong); padding-top:14px;}
+  .tqadmin-empty{color:var(--ink-muted); font-size:13.5px;}
+  .tqadmin-history{display:flex; flex-direction:column;}
+  .tqadmin-hrow{display:grid; grid-template-columns:90px 1fr auto 60px; gap:12px; align-items:center; padding:9px 2px; border-bottom:1px solid var(--line); font-size:12.5px;}
+  .tqadmin-hrow:last-child{border-bottom:none;}
+  .tqadmin-hwhen{color:var(--ink-faint); font-family:var(--font-mono); font-size:10.5px;}
+  .tqadmin-htag{font-family:var(--font-mono); font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; text-align:center;}
+  .tqadmin-htag.correct{background:var(--ok-tint); color:var(--ok);}
+  .tqadmin-htag.wrong{background:var(--bad-tint); color:var(--bad);}
+
   .history-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); margin-top:22px; overflow:hidden;}
   .history-head{padding:14px 16px 10px; border-bottom:1px solid var(--line);}
   .history-head h2{font-family:var(--font-display); font-size:15px; margin:0 0 2px;}
@@ -378,6 +429,7 @@
     <button type="button" class="type-tab active" data-type="gmp">GMP Workplace Audit</button>
     <button type="button" class="type-tab" data-type="internal">Internal Audit</button>
     <button type="button" class="type-tab" data-type="glass">Glass &amp; Brittle Audit</button>
+    <button type="button" class="type-tab" data-type="safety">Daily Safety Walk</button>
     <button type="button" class="type-tab" data-type="dashboard">Dashboard</button>
     <div class="admin-popover" style="margin-left:auto">
       <button class="btn admin-toggle" id="adminToggleBtn">Admin</button>
@@ -499,6 +551,7 @@
 
   <div id="panel-internal" class="audit-panel"></div>
   <div id="panel-glass" class="audit-panel"></div>
+  <div id="panel-safety" class="audit-panel"></div>
   <div id="panel-dashboard" class="audit-panel"></div>
 </div>
 
@@ -1830,6 +1883,7 @@ function wireTabs(){
     gmp: document.getElementById("panel-gmp"),
     internal: document.getElementById("panel-internal"),
     glass: document.getElementById("panel-glass"),
+    safety: document.getElementById("panel-safety"),
     dashboard: document.getElementById("panel-dashboard"),
   };
   tabs.forEach(function(tab){
@@ -1841,6 +1895,7 @@ function wireTabs(){
       });
       if(type === "internal") internalConsole.init();
       if(type === "glass") glassConsole.init();
+      if(type === "safety") safetyConsole.init();
       if(type === "dashboard") dashboardConsole.init();
     });
   });
@@ -1878,6 +1933,40 @@ function panelSkeleton(cfg){
     : "";
   var naChipHtml = cfg.hasNaStatus
     ? '<span class="chip muted">N/A <b data-el="chipNa">0</b></span>'
+    : "";
+  var trainingGateHtml = cfg.hasTrainingGate
+    ? '<div class="training-gate" data-el="trainingGate"></div>'
+    : "";
+  var qaInitialsFieldHtml = cfg.hasQaInitials !== false
+    ? '<div class="field"><label>QA Lead / Tech Initials</label><input data-el="qaInitials" type="text" placeholder="Initials"></div>'
+    : "";
+  var trainingAdminHtml = cfg.hasTrainingGate
+    ? (
+      '<section class="admin-panel tqadmin-panel" data-el="tqAdminPanel">' +
+        '<h3>Manage Weekly Training Question Bank</h3>' +
+        '<div class="tqadmin-list" data-el="tqList"></div>' +
+        '<div class="tqadmin-add">' +
+          '<h3 style="margin-top:0;">Add a Question</h3>' +
+          '<input type="text" class="tqadmin-field" data-el="tqNewCategory" placeholder="Category (e.g. OSHA Safety, Food Safety Culture)">' +
+          '<textarea class="tqadmin-field tqadmin-prompt" data-el="tqNewPrompt" placeholder="Question prompt" rows="2"></textarea>' +
+          '<div class="tqadmin-opt-row"><label>A</label><input type="text" class="tqadmin-field" style="margin:0;" data-el="tqNewOptA" placeholder="Option A"></div>' +
+          '<div class="tqadmin-opt-row"><label>B</label><input type="text" class="tqadmin-field" style="margin:0;" data-el="tqNewOptB" placeholder="Option B"></div>' +
+          '<div class="tqadmin-opt-row"><label>C</label><input type="text" class="tqadmin-field" style="margin:0;" data-el="tqNewOptC" placeholder="Option C"></div>' +
+          '<div class="tqadmin-opt-row"><label>&check;</label>' +
+            '<select class="tqadmin-field" style="margin:0; width:auto;" data-el="tqNewCorrect">' +
+              '<option value="A">A is correct</option><option value="B">B is correct</option><option value="C">C is correct</option>' +
+            '</select>' +
+          '</div>' +
+          '<textarea class="tqadmin-explain" data-el="tqNewExplain" placeholder="Explanation shown after answering" rows="2"></textarea>' +
+          '<div style="margin-top:10px;"><button type="button" class="btn" data-el="tqAddBtn">+ Add Question</button></div>' +
+        '</div>' +
+      '</section>' +
+      '<section class="admin-panel tqadmin-panel" data-el="tqHistoryPanel">' +
+        '<h3>Weekly Training Response History</h3>' +
+        '<div class="tqadmin-sub">Last 200 answers logged from the floor.</div>' +
+        '<div class="tqadmin-history" data-el="tqHistoryBody"><div class="tqadmin-empty">No responses logged yet.</div></div>' +
+      '</section>'
+    )
     : "";
   return (
     '<header class="top">' +
@@ -1929,9 +2018,10 @@ function panelSkeleton(cfg){
         '</div>' +
         '<div class="signoff-card" data-el="signoffCard">' +
           '<h3>Sign-Off</h3>' +
+          trainingGateHtml +
           '<div class="signoff-gate locked" data-el="signoffGate">All open deviations must be acknowledged first.</div>' +
           '<div class="signoff-fields" data-el="signoffFields">' +
-            '<div class="field"><label>QA Lead / Tech Initials</label><input data-el="qaInitials" type="text" placeholder="Initials"></div>' +
+            qaInitialsFieldHtml +
             '<div class="field"><label>Reviewed By</label><input data-el="reviewedBy" type="text" placeholder="Name"></div>' +
             '<div class="field"><label>Date</label><input data-el="reviewedDate" type="text" placeholder="MM/DD/YYYY"></div>' +
             '<div class="field signoff-confirm-field"><label>&nbsp;</label><button class="btn" data-el="confirmSignoffBtn" type="button">Confirm Sign-Off</button></div>' +
@@ -1953,8 +2043,9 @@ function panelSkeleton(cfg){
         '<div class="history-empty">No audits archived yet &mdash; they&rsquo;ll show up here after your first &ldquo;New Audit.&rdquo;</div>' +
       '</div>' +
     '</section>' +
+    trainingAdminHtml +
     '<footer class="page-footer">' +
-      '<span>' + cfg.docNumber + ' ' + cfg.label + ' Form &middot; Written by Michael Asante</span>' +
+      '<span>' + (cfg.docNumber ? cfg.docNumber + ' ' : '') + cfg.label + ' Form &middot; Written by Michael Asante</span>' +
       '<span>Revise Date <span data-el="footerRevDate">&mdash;</span></span>' +
     '</footer>'
   );
@@ -1964,10 +2055,35 @@ function mountAuditConsole(cfg){
   var root = cfg.root;
   var el = {};
   var state = null;
+  var acct = null; // account-wide shift contacts + EmailJS keys (only fetched when needed)
   var saveTimers = {}, pendingSaveFns = {};
   var trackedRev = null;
   var started = false;
   var armedDelete = null; // reset-button arm state
+  var trainingState = null; // { question, weekKey, answered, selected } — only used when cfg.hasTrainingGate
+  var tqQuestions = []; // full training question bank, admin-only — only used when cfg.hasTrainingGate
+  var tqArmedDeletes = {};
+  var tqLastAdminFlag = false;
+
+  async function loadAccountSettings(){
+    if(!cfg.hasShift && !cfg.hasNotify && !cfg.hasTrainingGate) return;
+    try{ acct = await api("/api/account-settings"); }catch(e){ acct = null; }
+  }
+
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function isAdmin(){
+    try{ return !!sessionStorage.getItem("adminPasscode"); }catch(e){ return false; }
+  }
+  function formatWhen(iso){
+    if(!iso) return "";
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
 
   function objWith(key, val){ var o = {}; o[key] = val; return o; }
 
@@ -2047,7 +2163,7 @@ function mountAuditConsole(cfg){
     bindOpenField("auditDate", "audit_date");
     bindGatedField("reviewedBy", "reviewed_by");
     bindGatedField("reviewedDate", "reviewed_date");
-    bindOpenField("qaInitials", "qa_initials");
+    if(cfg.hasQaInitials !== false) bindOpenField("qaInitials", "qa_initials");
     bindAdminField("eyebrowInput", "eyebrow");
     bindAdminField("titleInput", "title");
     bindAdminField("subtitleInput", "subtitle");
@@ -2570,10 +2686,117 @@ function mountAuditConsole(cfg){
     r.photoCountNote.textContent = photos.length + "/" + MAX_PHOTOS_PER_ITEM + " photos";
   }
 
+  // ---------------- Shift + notify (only used when cfg.hasShift / cfg.hasNotify) ----------------
+  function setNotifyHint(entry, msg, isErr){
+    var hint = entry._refs.notifyHint;
+    if(!hint) return;
+    hint.textContent = msg;
+    hint.classList.toggle("err", !!isErr);
+  }
+
+  function notifiedHintText(item){
+    if(!item.notified_at) return "";
+    try{
+      var d = new Date(item.notified_at);
+      return "Emailed " + d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + ".";
+    }catch(e){ return "Emailed."; }
+  }
+
+  // Works out, purely from data already loaded client-side, who a deviation's
+  // notification would go to: the section's department head always, plus the
+  // shift supervisor + lead if that section is flagged as production line.
+  function computeRecipients(item){
+    var dept = (state.departments || []).find(function(d){ return d.section === item.section; });
+    var recipients = [];
+    if(dept && dept.head_email && dept.head_email.trim()){
+      recipients.push({ email: dept.head_email.trim(), label: "Department Head" });
+    }
+    var requiresShift = !!(dept && dept.is_production_line);
+    if(requiresShift && item.shift && acct){
+      var shiftLabel = acct["shift" + item.shift + "_name"] || ("Shift " + item.shift);
+      var supEmail = acct["shift" + item.shift + "_email"];
+      var leadEmail = acct["shift" + item.shift + "_lead_email"];
+      if(supEmail && supEmail.trim()) recipients.push({ email: supEmail.trim(), label: shiftLabel + " Supervisor" });
+      if(leadEmail && leadEmail.trim()) recipients.push({ email: leadEmail.trim(), label: shiftLabel + " Lead" });
+    }
+    return { dept: dept, recipients: recipients, requiresShift: requiresShift };
+  }
+
+  function recipientPreviewText(item){
+    if(item.notified_at) return notifiedHintText(item);
+    var info = computeRecipients(item);
+    if(info.requiresShift && !item.shift) return "Pick a shift above — this is a production line department.";
+    if(info.recipients.length === 0) return "No recipients configured — set a department head in Admin.";
+    return "Sends to: " + info.recipients.map(function(r){ return r.label; }).join(", ");
+  }
+
+  async function handlePickShift(id, slot, entry){
+    var item = state.items.find(function(i){ return i.id === id; });
+    var newSlot = (item && item.shift === slot) ? null : slot;
+    try{
+      var res = await api(cfg.apiBase + "/items/" + id + "/nc", { method: "POST", body: JSON.stringify({ shift: newSlot }) });
+      Object.assign(item, res.item);
+      $all(".shift-btn", entry._refs.shiftToggle).forEach(function(b){
+        b.classList.toggle("active", Number(b.dataset.slot) === newSlot);
+      });
+      entry.dataset.shift = newSlot || "";
+      if(entry._refs.notifyHint && !entry._refs.notifyHint.classList.contains("err")){
+        entry._refs.notifyHint.textContent = recipientPreviewText(item);
+      }
+    }catch(e){ toast("Couldn't save shift: " + e.message); }
+  }
+
+  async function handleNotify(item, entry, btn){
+    if(!acct || !acct.emailjs_service_id || !acct.emailjs_template_id || !acct.emailjs_public_key){
+      setNotifyHint(entry, "Email isn't set up yet — add your EmailJS keys in Admin.", true);
+      return;
+    }
+    if(typeof emailjs === "undefined"){
+      setNotifyHint(entry, "Email service didn't load — check your connection and try again.", true);
+      return;
+    }
+    var info = computeRecipients(item);
+    if(info.requiresShift && !item.shift){
+      setNotifyHint(entry, "Pick a shift above first — this is a production line department.", true);
+      return;
+    }
+    if(info.recipients.length === 0){
+      setNotifyHint(entry, "No recipients configured — set a department head in Admin.", true);
+      return;
+    }
+    btn.disabled = true;
+    var prevLabel = btn.textContent;
+    btn.textContent = "Sending…";
+    setNotifyHint(entry, "", false);
+    try{
+      var payload = await api(cfg.apiBase + "/items/" + item.id + "/notify-payload");
+      await emailjs.send(acct.emailjs_service_id, acct.emailjs_template_id, {
+        to_email: payload.to,
+        subject: payload.subject,
+        message: payload.message,
+        link: payload.link,
+        shift: payload.shift || ""
+      }, { publicKey: acct.emailjs_public_key });
+
+      var res = await api(cfg.apiBase + "/items/" + item.id + "/notify", { method: "POST", body: JSON.stringify({ sentTo: payload.to }) });
+      item.notified_at = res.item.notified_at;
+      setNotifyHint(entry, notifiedHintText(item), false);
+      toast("Emailed " + (payload.recipientSummary || payload.to) + ".");
+    }catch(e){
+      var msg = (e && e.text) || (e && e.message) || "Couldn't send the email.";
+      setNotifyHint(entry, msg, true);
+      toast("Couldn't send: " + msg);
+    }finally{
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+    }
+  }
+
   function buildNcCard(item){
     var entry = document.createElement("div");
     entry.className = "nc-entry";
     entry.dataset.itemId = item.id;
+    if(cfg.hasShift) entry.dataset.shift = item.shift || "";
     entry.dataset.status = item.status || "";
     entry._refs = {};
 
@@ -2604,6 +2827,25 @@ function mountAuditConsole(cfg){
     entry._refs.corrInput = fieldBlock(entry, item, 'Corrective Action <span class="hint">(what was done at the time)</span>', "Corrective action taken", "corrective_action", "corrective_action");
     entry._refs.prevInput = fieldBlock(entry, item, 'Preventive Measures <span class="hint">(steps to prevent recurrence)</span>', "Preventive measures", "preventive_measures", "preventive_measures");
 
+    if(cfg.hasShift){
+      var shiftWrap = document.createElement("div"); shiftWrap.className = "nc-field";
+      var shiftLabel = document.createElement("label"); shiftLabel.textContent = "Shift";
+      var shiftToggle = document.createElement("div"); shiftToggle.className = "shift-toggle";
+      for(var s = 1; s <= 4; s++){
+        (function(slot){
+          var b = document.createElement("button");
+          b.type = "button"; b.className = "shift-btn"; b.dataset.slot = String(slot);
+          b.textContent = (acct && acct["shift" + slot + "_name"]) || ("Shift " + slot);
+          if(item.shift === slot) b.classList.add("active");
+          b.addEventListener("click", function(){ handlePickShift(item.id, slot, entry); });
+          shiftToggle.appendChild(b);
+        })(s);
+      }
+      shiftWrap.appendChild(shiftLabel); shiftWrap.appendChild(shiftToggle);
+      entry.appendChild(shiftWrap);
+      entry._refs.shiftToggle = shiftToggle;
+    }
+
     if(cfg.hasCapaStatus){
       var capaWrap = document.createElement("div"); capaWrap.className = "nc-field";
       var capaLabel = document.createElement("label"); capaLabel.textContent = "CAPA Status";
@@ -2626,6 +2868,18 @@ function mountAuditConsole(cfg){
     }
 
     entry._refs.initialsInput = fieldBlock(entry, item, "Acknowledgment", "Initials", "initials");
+
+    if(cfg.hasNotify){
+      var notifyWrap = document.createElement("div"); notifyWrap.className = "nc-field no-print";
+      var notifyBtn = document.createElement("button");
+      notifyBtn.type = "button"; notifyBtn.className = "notify-btn"; notifyBtn.textContent = "Send Notification";
+      var notifyHint = document.createElement("span"); notifyHint.className = "notify-hint";
+      notifyBtn.addEventListener("click", function(){ handleNotify(item, entry, notifyBtn); });
+      notifyWrap.appendChild(notifyBtn); notifyWrap.appendChild(notifyHint);
+      entry.appendChild(notifyWrap);
+      entry._refs.notifyBtn = notifyBtn;
+      entry._refs.notifyHint = notifyHint;
+    }
 
     var photoWrap = document.createElement("div"); photoWrap.className = "nc-field";
     var photoLabel = document.createElement("label"); photoLabel.textContent = "Photos of Location (up to " + MAX_PHOTOS_PER_ITEM + ")";
@@ -2656,9 +2910,13 @@ function mountAuditConsole(cfg){
     setValueIfIdle(r.prevInput, item.preventive_measures);
     setValueIfIdle(r.initialsInput, item.initials);
     if(r.capaSelect && document.activeElement !== r.capaSelect) r.capaSelect.value = item.capa_status || "Open";
+    if(cfg.hasShift) entry.dataset.shift = item.shift || "";
     entry.dataset.status = item.status || "";
     renderPhotoGallery(entry, item);
     updateAckBadge(entry, item.initials);
+    if(r.notifyHint && !r.notifyHint.classList.contains("err")){
+      r.notifyHint.textContent = recipientPreviewText(item);
+    }
   }
 
   function refreshNcEmptyState(){
@@ -2694,12 +2952,123 @@ function mountAuditConsole(cfg){
     el.ncCount.textContent = bad + " open";
   }
 
+  // ---------------- Weekly training gate (only when cfg.hasTrainingGate) ----
+  // Merged into the Daily Safety Walk per the "while doing the audit we also
+  // learn" request: this week's Safety & Food Culture Training question sits
+  // inside the Sign-Off card itself and blocks sign-off (same lock mechanism
+  // as unacknowledged deviations) until it's answered. The question bank and
+  // response history are still managed from the separate Training tab
+  // (admin-only there now) — this is just the answering surface.
+  function fillShiftOptionsForGate(selectEl){
+    var html = '<option value="">&mdash;</option>';
+    for(var i = 1; i <= 4; i++){
+      var name = (acct && acct["shift" + i + "_name"]) || ("Shift " + i);
+      html += '<option value="' + i + '">' + esc(name) + '</option>';
+    }
+    selectEl.innerHTML = html;
+  }
+
+  async function loadTrainingGate(){
+    if(!cfg.hasTrainingGate) return;
+    try{
+      var data = await api("/api/training/current");
+      var answered = !!(data.question && state.settings.training_week_key && state.settings.training_week_key === data.weekKey);
+      // Keep an in-progress (not yet submitted) selection across a
+      // poll-driven refresh, as long as it's still the same question.
+      var keepSelected = (trainingState && trainingState.question && data.question &&
+        trainingState.question.id === data.question.id && !answered) ? trainingState.selected : null;
+      trainingState = { question: data.question, weekKey: data.weekKey, answered: answered, selected: keepSelected };
+    }catch(e){
+      trainingState = null;
+    }
+    renderTrainingGate();
+  }
+
+  function renderTrainingGate(){
+    if(!cfg.hasTrainingGate || !el.trainingGate) return;
+    if(!trainingState || !trainingState.question){
+      el.trainingGate.innerHTML = "";
+      return;
+    }
+    var q = trainingState.question;
+    if(trainingState.answered){
+      el.trainingGate.innerHTML =
+        '<div class="training-gate-done">' +
+          '<span class="training-gate-check" aria-hidden="true">&#10003;</span>' +
+          '<span><b>This week&rsquo;s training question is answered.</b> ' + esc(q.category || "Training") + ': ' + esc(q.prompt) + '</span>' +
+        '</div>';
+      return;
+    }
+    var optsHtml = ["A", "B", "C"].map(function(letter){
+      var cls = "training-gate-option" + (trainingState.selected === letter ? " selected" : "");
+      return '<button type="button" class="' + cls + '" data-letter="' + letter + '">' +
+        '<span class="opt-letter">' + letter + '</span><span>' + esc(q.options[letter]) + '</span>' +
+      '</button>';
+    }).join("");
+    el.trainingGate.innerHTML =
+      '<div class="training-gate-card">' +
+        '<div class="training-gate-head">' +
+          '<span class="training-gate-badge">' + esc(q.category || "Training") + '</span>' +
+          '<span class="training-gate-label">This week&rsquo;s training question &mdash; answer to unlock sign-off</span>' +
+        '</div>' +
+        '<p class="training-gate-prompt">' + esc(q.prompt) + '</p>' +
+        '<div class="training-gate-options">' + optsHtml + '</div>' +
+        '<div class="training-gate-respondent">' +
+          '<div class="field"><label>Shift</label><select data-el="tgShift"></select></div>' +
+          '<div class="field"><label>Initials</label><input type="text" data-el="tgInitials" placeholder="Initials" autocomplete="off"></div>' +
+        '</div>' +
+        '<button type="button" class="btn" data-el="tgSubmit"' + (trainingState.selected ? "" : " disabled") + '>Submit Answer</button>' +
+      '</div>';
+
+    var shiftSelect = $("[data-el=tgShift]", el.trainingGate);
+    if(shiftSelect) fillShiftOptionsForGate(shiftSelect);
+
+    $all(".training-gate-option", el.trainingGate).forEach(function(btn){
+      btn.addEventListener("click", function(){
+        trainingState.selected = btn.dataset.letter;
+        $all(".training-gate-option", el.trainingGate).forEach(function(b){ b.classList.toggle("selected", b === btn); });
+        var submitBtn = $("[data-el=tgSubmit]", el.trainingGate);
+        if(submitBtn) submitBtn.disabled = false;
+      });
+    });
+    var submitBtn = $("[data-el=tgSubmit]", el.trainingGate);
+    if(submitBtn) submitBtn.addEventListener("click", submitTrainingGate);
+  }
+
+  async function submitTrainingGate(){
+    if(!trainingState || !trainingState.selected || !trainingState.question) return;
+    var submitBtn = $("[data-el=tgSubmit]", el.trainingGate);
+    if(submitBtn) submitBtn.disabled = true;
+    try{
+      var shiftSelect = $("[data-el=tgShift]", el.trainingGate);
+      var initialsInput = $("[data-el=tgInitials]", el.trainingGate);
+      var res = await api("/api/training/answer", {
+        method: "POST",
+        body: JSON.stringify({
+          questionId: trainingState.question.id,
+          selected: trainingState.selected,
+          shift: shiftSelect ? shiftSelect.value : "",
+          initials: initialsInput ? initialsInput.value : "",
+        }),
+      });
+      trainingState.answered = true;
+      state.settings.training_week_key = trainingState.weekKey; // optimistic — matches what the server just recorded
+      toast(res.correct ? "Correct — training question answered." : "Logged. " + res.explanation);
+      renderTrainingGate();
+      renderGate();
+    }catch(e){
+      toast("Couldn't submit: " + e.message);
+      if(submitBtn) submitBtn.disabled = false;
+    }
+  }
+
   function renderGate(){
     var openItems = state.items.filter(function(i){ return i.status === failStatus(); });
     var pending = openItems.filter(function(i){ return !i.initials || !i.initials.trim(); })
       .map(function(i){ return itemPositions[i.id] || i.id; });
+    var trainingBlocking = !!(cfg.hasTrainingGate && trainingState && trainingState.question && !trainingState.answered);
     var card = el.signoffCard, gate = el.signoffGate;
-    if(pending.length === 0){
+    if(pending.length === 0 && !trainingBlocking){
       card.classList.remove("locked"); gate.classList.remove("locked"); gate.classList.add("open");
       gate.textContent = openItems.length === 0
         ? "No open deviations. Ready for sign-off."
@@ -2707,10 +3076,203 @@ function mountAuditConsole(cfg){
       el.chipPending.style.display = "none";
     } else {
       card.classList.add("locked"); gate.classList.add("locked"); gate.classList.remove("open");
-      gate.textContent = "Waiting on acknowledgment for item(s) #" + pending.join(", #") + " before sign-off.";
-      el.chipPending.style.display = "inline-flex";
+      if(pending.length > 0 && trainingBlocking){
+        gate.textContent = "Waiting on acknowledgment for item(s) #" + pending.join(", #") + ", and this week's training question, before sign-off.";
+      } else if(trainingBlocking){
+        gate.textContent = "Answer this week's training question above before sign-off.";
+      } else {
+        gate.textContent = "Waiting on acknowledgment for item(s) #" + pending.join(", #") + " before sign-off.";
+      }
+      el.chipPending.style.display = pending.length > 0 ? "inline-flex" : "none";
       el.chipPendingNum.textContent = pending.length;
     }
+  }
+
+  // ---------------- Weekly training question bank (admin-only; only when
+  // cfg.hasTrainingGate) ----------------
+  // Question bank management and response history used to live on their own
+  // "Safety & Food Culture Training" tab. That tab is gone now — everyone
+  // answers the question right in this walk's Sign-Off card (above), and
+  // these admin tools live down here instead, at the bottom of the same
+  // Daily Safety Walk tab. Both sections use the plain .admin-panel class,
+  // so — like the existing "Admin Settings" panel above — they hide/show
+  // automatically with the shared account-wide Admin toggle; no manual
+  // style.display bookkeeping needed for visibility, only for *when to
+  // fetch* (no point calling the admin-only endpoints for a non-admin).
+  function renderTrainingAdminList(){
+    if(!el.tqList) return;
+    if(!tqQuestions.length){
+      el.tqList.innerHTML = '<div class="tqadmin-empty">No questions yet &mdash; add one below.</div>';
+      return;
+    }
+    el.tqList.innerHTML = tqQuestions.map(function(q){
+      return (
+        '<div class="tqadmin-row' + (q.active ? "" : " inactive") + '" data-id="' + q.id + '">' +
+          '<div class="tqadmin-row-top">' +
+            '<span class="tqadmin-cat">' + esc(q.category || "Uncategorized") + (q.active ? "" : " &middot; inactive") + '</span>' +
+            '<div class="tqadmin-actions">' +
+              '<button type="button" data-act="save">Save</button>' +
+              '<button type="button" data-act="toggle">' + (q.active ? "Deactivate" : "Activate") + '</button>' +
+              '<button type="button" class="danger" data-act="delete">Delete</button>' +
+            '</div>' +
+          '</div>' +
+          '<input type="text" class="tqadmin-field" data-field="category" value="' + esc(q.category) + '" placeholder="Category">' +
+          '<textarea class="tqadmin-field tqadmin-prompt" data-field="prompt" rows="2">' + esc(q.prompt) + '</textarea>' +
+          ["A", "B", "C"].map(function(letter){
+            return '<div class="tqadmin-opt-row">' +
+              '<label><input type="radio" name="tqadmin-correct-' + q.id + '" data-field="correct" value="' + letter + '"' + (q.correct === letter ? " checked" : "") + '> ' + letter + '</label>' +
+              '<input type="text" class="tqadmin-field" style="margin:0;" data-field="opt' + letter + '" value="' + esc(q.options[letter]) + '">' +
+            '</div>';
+          }).join("") +
+          '<textarea class="tqadmin-explain" data-field="explanation" rows="2" placeholder="Explanation">' + esc(q.explanation) + '</textarea>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function renderTrainingHistory(rows){
+    if(!el.tqHistoryBody) return;
+    if(!rows.length){
+      el.tqHistoryBody.innerHTML = '<div class="tqadmin-empty">No responses logged yet.</div>';
+      return;
+    }
+    el.tqHistoryBody.innerHTML = rows.map(function(r){
+      return (
+        '<div class="tqadmin-hrow">' +
+          '<span class="tqadmin-hwhen">' + formatWhen(r.createdAt) + '</span>' +
+          '<span>' + esc(r.prompt) + '</span>' +
+          '<span>' + esc(r.initials || "&mdash;") + (r.shift ? " &middot; Shift " + r.shift : "") + '</span>' +
+          '<span class="tqadmin-htag ' + (r.correct ? "correct" : "wrong") + '">' + (r.correct ? "Correct" : esc(r.selected)) + '</span>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  async function loadTrainingAdmin(){
+    if(!cfg.hasTrainingGate || !isAdmin()) return;
+    try{
+      var data = await api("/api/training/questions");
+      tqQuestions = data.questions || [];
+      renderTrainingAdminList();
+    }catch(e){
+      if(el.tqList) el.tqList.innerHTML = '<div class="tqadmin-empty">Couldn&rsquo;t load questions: ' + esc(e.message) + '</div>';
+    }
+    try{
+      var hist = await api("/api/training/history");
+      renderTrainingHistory(hist.responses || []);
+    }catch(e){
+      if(el.tqHistoryBody) el.tqHistoryBody.innerHTML = '<div class="tqadmin-empty">Couldn&rsquo;t load history.</div>';
+    }
+  }
+
+  async function refreshTrainingAdmin(){
+    await Promise.all([loadTrainingGate(), loadTrainingAdmin()]);
+  }
+
+  async function addTrainingQuestion(){
+    var body = {
+      category: el.tqNewCategory.value,
+      prompt: el.tqNewPrompt.value,
+      options: { A: el.tqNewOptA.value, B: el.tqNewOptB.value, C: el.tqNewOptC.value },
+      correct: el.tqNewCorrect.value,
+      explanation: el.tqNewExplain.value,
+    };
+    if(!body.prompt.trim() || !body.options.A.trim() || !body.options.B.trim() || !body.options.C.trim()){
+      toast("Prompt and all three options are required.");
+      return;
+    }
+    try{
+      await api("/api/training/questions", { method: "POST", body: JSON.stringify(body) });
+      el.tqNewCategory.value = ""; el.tqNewPrompt.value = ""; el.tqNewOptA.value = ""; el.tqNewOptB.value = ""; el.tqNewOptC.value = ""; el.tqNewExplain.value = ""; el.tqNewCorrect.value = "A";
+      toast("Question added.");
+      await refreshTrainingAdmin();
+    }catch(e){
+      toast("Couldn't add: " + e.message);
+    }
+  }
+
+  async function saveTrainingQuestionRow(row, id){
+    var get = function(field){ var f = row.querySelector('[data-field="' + field + '"]'); return f ? f.value : ""; };
+    var correctEl = row.querySelector('input[data-field="correct"]:checked');
+    var body = {
+      category: get("category"),
+      prompt: get("prompt"),
+      options: { A: get("optA"), B: get("optB"), C: get("optC") },
+      correct: correctEl ? correctEl.value : "A",
+      explanation: get("explanation"),
+    };
+    try{
+      await api("/api/training/questions/" + id, { method: "PATCH", body: JSON.stringify(body) });
+      toast("Saved.");
+      await refreshTrainingAdmin();
+    }catch(e){
+      toast("Couldn't save: " + e.message);
+    }
+  }
+
+  async function toggleTrainingQuestionActive(row, id){
+    var isActive = !row.classList.contains("inactive");
+    try{
+      await api("/api/training/questions/" + id, { method: "PATCH", body: JSON.stringify({ active: !isActive }) });
+      await refreshTrainingAdmin();
+    }catch(e){
+      toast("Couldn't update: " + e.message);
+    }
+  }
+
+  function armOrDeleteTrainingQuestion(btn, id){
+    if(tqArmedDeletes[id]){
+      clearTimeout(tqArmedDeletes[id]);
+      delete tqArmedDeletes[id];
+      deleteTrainingQuestion(id);
+      return;
+    }
+    btn.textContent = "Confirm?";
+    tqArmedDeletes[id] = setTimeout(function(){
+      delete tqArmedDeletes[id];
+      btn.textContent = "Delete";
+    }, 3000);
+  }
+
+  async function deleteTrainingQuestion(id){
+    try{
+      await api("/api/training/questions/" + id, { method: "DELETE" });
+      toast("Question deleted.");
+      await refreshTrainingAdmin();
+    }catch(e){
+      toast("Couldn't delete: " + e.message);
+    }
+  }
+
+  // Toggling the shared Admin button doesn't itself trigger a refetch, so
+  // without this the question bank/history wouldn't notice they just
+  // gained access until something else happened to bump the revision. This
+  // is a local-only check (no network call), so it can run often for free.
+  function watchTrainingAdminFlag(){
+    if(!cfg.hasTrainingGate) return;
+    setInterval(function(){
+      if(!started) return;
+      var nowAdmin = isAdmin();
+      if(nowAdmin !== tqLastAdminFlag){
+        tqLastAdminFlag = nowAdmin;
+        loadTrainingAdmin();
+      }
+    }, 600);
+  }
+
+  function wireTrainingAdminHandlers(){
+    if(!cfg.hasTrainingGate || !el.tqList) return;
+    el.tqList.addEventListener("click", function(e){
+      var btn = e.target.closest("button[data-act]");
+      if(!btn) return;
+      var row = btn.closest(".tqadmin-row");
+      var id = Number(row.dataset.id);
+      var act = btn.dataset.act;
+      if(act === "save") saveTrainingQuestionRow(row, id);
+      else if(act === "toggle") toggleTrainingQuestionActive(row, id);
+      else if(act === "delete") armOrDeleteTrainingQuestion(btn, id);
+    });
+    if(el.tqAddBtn) el.tqAddBtn.addEventListener("click", addTrainingQuestion);
   }
 
   function renderSignoffConfirm(){
@@ -2916,6 +3478,8 @@ function mountAuditConsole(cfg){
     renderChecklist();
     renderNc();
     renderSummary();
+    if(cfg.hasTrainingGate) await loadTrainingGate();
+    if(cfg.hasTrainingGate) await loadTrainingAdmin();
     renderGate();
     renderSignoffConfirm();
     if(el.connChip) el.connChip.style.display = "none";
@@ -2943,7 +3507,10 @@ function mountAuditConsole(cfg){
     wireHeaderFields();
     wireSignoffConfirm();
     wireReset();
+    wireTrainingAdminHandlers();
+    watchTrainingAdminFlag();
     try{
+      await loadAccountSettings();
       await loadState();
     }catch(e){
       if(el.connChip){ el.connChip.style.display = "inline-flex"; el.connChip.textContent = "Can't reach the server — retrying…"; }
@@ -2965,6 +3532,7 @@ function mountDashboard(cfg){
   var sources = cfg.sources;
   var started = false;
   var trackedRev = null;
+  var mentraFlags = [];
 
   async function api(path){
     var res = await fetch(path);
@@ -3192,6 +3760,28 @@ function mountDashboard(cfg){
       }
     }
 
+    var mentraHtml;
+    if(mentraFlags.length === 0){
+      mentraHtml = '<div class="db-empty">No AI spot-checks yet &mdash; trigger one from the Mentra glasses to see it here.</div>';
+    } else {
+      mentraHtml = mentraFlags.slice(0, 12).map(function(f){
+        var tagClass = f.flagged ? "open" : "closed";
+        var tagText = f.flagged ? "Flagged" : "Clear";
+        var whenDate = new Date(f.createdAt);
+        var when = isNaN(whenDate.getTime()) ? f.createdAt : whenDate.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+        return (
+          '<div class="db-log-row" style="grid-template-columns:56px 1fr auto;">' +
+            '<img src="' + esc(f.photoUrl) + '" alt="" style="width:52px; height:52px; object-fit:cover; border-radius:3px; border:1px solid var(--db-line-strong);" />' +
+            '<div>' +
+              '<div class="db-log-item">' + esc(f.summary || "No read.") + '</div>' +
+              '<div class="db-log-meta">' + esc(when) + (f.transcript ? ' &middot; heard: &ldquo;' + esc(f.transcript) + '&rdquo;' : '') + '</div>' +
+            '</div>' +
+            '<div class="db-log-tag ' + tagClass + '">' + tagText + '</div>' +
+          '</div>'
+        );
+      }).join("");
+    }
+
     var trendHtml = data.map(function(src){
       var hist = src.history;
       var lastRate = null;
@@ -3241,9 +3831,13 @@ function mountDashboard(cfg){
           '<div class="db-label">Priority Findings</div>' +
           findingsHtml +
         '</div>' +
-        '<div class="db-panel">' +
+        '<div class="db-panel" style="margin-bottom:14px;">' +
           '<div class="db-label">Trend &mdash; Pass Rate by Archived Audit</div>' +
           trendHtml +
+        '</div>' +
+        '<div class="db-panel">' +
+          '<div class="db-label">AI Spot Checks &mdash; Mentra Glasses (prototype)</div>' +
+          mentraHtml +
         '</div>' +
         '<div class="db-foot"><span>Updated ' + updatedAt + '</span><span>Refreshes automatically</span></div>' +
       '</div>';
@@ -3251,6 +3845,10 @@ function mountDashboard(cfg){
 
   async function loadAndRender(){
     var data = await loadAll();
+    try{
+      var flagsData = await api("/api/mentra/flags");
+      mentraFlags = flagsData.flags || [];
+    }catch(e){ /* non-critical — dashboard still renders without it */ }
     render(data);
   }
 
@@ -3310,11 +3908,29 @@ var glassConsole = mountAuditConsole({
   zoneOptions: [["High", "Weekly"], ["Medium", "Monthly"], ["Low", "Quarterly"]],
 });
 
+var safetyConsole = mountAuditConsole({
+  typeKey: "safety",
+  apiBase: "/api/safety",
+  root: document.getElementById("panel-safety"),
+  docNumber: "",
+  label: "Daily Safety Walk",
+  passLabel: "Safe",
+  failLabel: "Hazard",
+  hasNaStatus: true,
+  hasZoneField: false,
+  hasCapaStatus: true,
+  hasShift: true,
+  hasNotify: true,
+  hasTrainingGate: true,
+  hasQaInitials: false,
+});
+
 var dashboardConsole = mountDashboard({
   root: document.getElementById("panel-dashboard"),
   sources: [
     { key: "internal", apiBase: "/api/internal", label: "Internal Audit" },
     { key: "glass", apiBase: "/api/glass", label: "Glass & Brittle" },
+    { key: "safety", apiBase: "/api/safety", label: "Daily Safety Walk" },
   ],
 });
 
