@@ -1,4 +1,21 @@
 // Canonical VF-0033-00 GMP checklist content, in section order.
+//
+// Restructured Sept 2026 per instructions relayed from the site's safety
+// chairwoman: relabeled Warehouse as "Warehouse / Walker"; merged
+// Laboratory + Chemical/Mineral/Non-Product Material Storage into "QA /
+// Chemical Storage"; merged Water Processing Area + Compressor and Chiller
+// into "Water Processing / Compressor & Chiller"; relabeled Main Office
+// Area as "Maintenance / Boneyard / Office" and added the 7 new Boneyard
+// items she specified; added a brand-new "Injection / Regrind" area (no
+// GMP section covered injection molding before — items drawn from the
+// Internal Audit's Husky/Regrind area content, focused on OSHA
+// machine-safety topics); and added a copy of the 5 Employee Practices
+// items to every one of those areas plus to Production PET 1 and PET 2
+// (which otherwise keep their own identity and stay separately tracked).
+// The original "Employee Practices (All Areas)" section is left in place
+// on its own — see server/db.js for the one-time migration that applies
+// this same restructuring, item-for-item and non-destructively, to an
+// already-seeded live database.
 module.exports = [
   ["Employee Practices (All Areas)", [
     "Employees are following good hand washing procedures.",
@@ -30,6 +47,11 @@ module.exports = [
     "Only approved resin materials are present and in use in the area.",
     "No oil, grease, or hydraulic leaks are observed on or around equipment.",
     "Molds and forming components are clean, intact, and free from buildup or foreign material.",
+    "Employees are following good hand washing procedures.",
+    "Employees are not wearing jewelry or nail polish and all items are below the waist.",
+    "No evidence of employees chewing gum or eating out on the lines.",
+    "No personal items (phones, keys, wallets) in GMP areas",
+    "Employees are wearing hairnets and beardnets properly. Wound(s) are covered with bandaged protected with rubber gloves.",
   ]],
   ["Production: PET 2, HuskyFiller/Cappers/Cap Hopper/Labeler/Case Packer/Palletizer", [
     "Production areas are orderly and not used for storage of extraneous materials; all parts, tools, and components are stored off the floor.",
@@ -54,8 +76,13 @@ module.exports = [
     "Only approved resin materials are present and in use in the area.",
     "No oil, grease, or hydraulic leaks are observed on or around equipment.",
     "Molds and forming components are clean, intact, and free from buildup or foreign material.",
+    "Employees are following good hand washing procedures.",
+    "Employees are not wearing jewelry or nail polish and all items are below the waist.",
+    "No evidence of employees chewing gum or eating out on the lines.",
+    "No personal items (phones, keys, wallets) in GMP areas",
+    "Employees are wearing hairnets and beardnets properly. Wound(s) are covered with bandaged protected with rubber gloves.",
   ]],
-  ["Water Processing Area (RO / Filtration / Mineral Injection / Utilities)", [
+  ["Water Processing / Compressor & Chiller", [
     "Water processing areas are clean, orderly, and free from unnecessary or extraneous materials.",
     "Floors are clean, dry, and free of standing water, residue, or buildup.",
     "Tanks, piping, manifolds, and valves are clean, intact, and in good condition.",
@@ -69,15 +96,18 @@ module.exports = [
     "In-process tanks are closed, covered, and protected from contamination.",
     "Cleaning tools used in the water processing area are stored properly and segregated as required.",
     "Light fixtures, covers, and overhead structures do not pose a contamination risk to water or equipment.",
-  ]],
-  ["Compressor and Chiller", [
     "Utility systems area (compressors and chillers) is clean, orderly, and free from unnecessary or extraneous materials.",
     "Floors are clean, dry, and free of oil, grease, water, condensate, or debris.",
     "Compressors, chillers, air dryers, receivers, and associated utility equipment are clean and in good operating condition.",
     "No oil, air, water, refrigerant, or condensate leaks are observed from equipment, piping, hoses, or connections.",
     "Lubricants, refrigerants, oils, and maintenance chemicals are properly stored",
+    "Employees are following good hand washing procedures.",
+    "Employees are not wearing jewelry or nail polish and all items are below the waist.",
+    "No evidence of employees chewing gum or eating out on the lines.",
+    "No personal items (phones, keys, wallets) in GMP areas",
+    "Employees are wearing hairnets and beardnets properly. Wound(s) are covered with bandaged protected with rubber gloves.",
   ]],
-  ["Warehouse (Materials Receiving, Storage & Distribution)", [
+  ["Warehouse / Walker", [
     "Forklift bays and material handling areas are clean, clearly designated, and free from unnecessary materials.",
     "No finished product, packaging, or ingredients are stored in forklift parking or charging areas.",
     "Forklifts, charging or fueling equipment, and associated areas are in good condition with no oil, hydraulic, or battery leaks.",
@@ -91,8 +121,13 @@ module.exports = [
     "Cleaning tools are stored off the floor in designated locations; trash containers are covered and not overflowing.",
     "No food, drinks, or personal items are stored in warehouse product or material storage areas.",
     "No evidence of pest activity, harborage conditions, or unsealed entry points is observed.",
+    "Employees are following good hand washing procedures.",
+    "Employees are not wearing jewelry or nail polish and all items are below the waist.",
+    "No evidence of employees chewing gum or eating out on the lines.",
+    "No personal items (phones, keys, wallets) in GMP areas",
+    "Employees are wearing hairnets and beardnets properly. Wound(s) are covered with bandaged protected with rubber gloves.",
   ]],
-  ["Chemical, Mineral & Non-Product Material Storage", [
+  ["QA / Chemical Storage", [
     "Chemical and mineral storage areas are clean, organized, and designated.",
     "Access to chemical storage areas is controlled.",
     "Chemical containers are properly labeled, capped, and not leaking.",
@@ -100,8 +135,6 @@ module.exports = [
     "Chemicals, lubricants, and maintenance materials are segregated from product and packaging.",
     "Mineral containers and bags are intact and properly stored.",
     "No chemical spills, residues, or buildup observed.",
-  ]],
-  ["Laboratory", [
     "Laboratory areas are clean, orderly, and free of unnecessary clutter or unused materials.",
     "No food, drinks, or personal items are present in laboratory work or sample handling areas.",
     "Samples are properly labeled, identified, and controlled to prevent mix-ups or contamination.",
@@ -109,12 +142,48 @@ module.exports = [
     "Glassware is clean, intact, and stored properly to prevent contamination or damage.",
     "Laboratory equipment is clean, maintained, and in good working condition.",
     "Laboratory waste containers are properly labeled, appropriate for the waste type, and not overflowing.",
+    "Employees are following good hand washing procedures.",
+    "Employees are not wearing jewelry or nail polish and all items are below the waist.",
+    "No evidence of employees chewing gum or eating out on the lines.",
+    "No personal items (phones, keys, wallets) in GMP areas",
+    "Employees are wearing hairnets and beardnets properly. Wound(s) are covered with bandaged protected with rubber gloves.",
   ]],
-  ["Main Office Area", [
+  ["Maintenance / Boneyard / Office", [
     "Main office areas are clean, orderly, and free of unnecessary clutter or unused materials.",
     "Floors, desks, cabinets, and work surfaces are clean and maintained to prevent dust or debris accumulation.",
     "No ingredients, packaging materials, finished product, samples, or production tools are stored in the main office area.",
     "Office waste containers are appropriate for use, covered where required, and not overflowing.",
     "Contractors, service personnel, and visitors sign the GMP log and acknowledge GMP requirements before being granted access to GMP-controlled areas.",
+    "Floors are clean, dry, and free of oil, grease, water, condensate, or debris.",
+    "Maintenance tools used are stored properly and segregated as required.",
+    "Hoses are properly connected during use, capped where applicable, and stored off the floor when not in use.",
+    "Lubricants, refrigerants, oils, and maintenance chemicals are properly stored.",
+    "Chemical containers are properly labeled, capped, and not leaking.",
+    "Trash containers are available at points of use, covered where required, and not overflowing.",
+    "Walkway is available, free of debris and obstruction in front of Boneyard.",
+    "Employees are following good hand washing procedures.",
+    "Employees are not wearing jewelry or nail polish and all items are below the waist.",
+    "No evidence of employees chewing gum or eating out on the lines.",
+    "No personal items (phones, keys, wallets) in GMP areas",
+    "Employees are wearing hairnets and beardnets properly. Wound(s) are covered with bandaged protected with rubber gloves.",
+  ]],
+  ["Injection / Regrind", [
+    "Machine guards, disconnect panels, and safety interlocks are in place, secured, and functioning.",
+    "HMI and control panels are functioning and free of fault alarms.",
+    "E-stops and safety interlocks are tested and functioning.",
+    "Conveyor covers and drive guards are intact and properly secured.",
+    "Grinder is guarded, with no damaged or missing blades or covers; blender and deduster are clean and free of excessive dust buildup.",
+    "Machines are free of hydraulic, oil, or other fluid leaks.",
+    "Hoses and tools are stored properly rather than left exposed on or around the machine.",
+    "Area is free of spilled resin, preforms, regrind material, plastic shavings, and debris.",
+    "Only approved non-conforming plastics/preforms are fed into the regrind system, with no foreign material.",
+    "Regrind material is stored in labeled, covered containers to prevent contamination.",
+    "Preventive-maintenance program is documented and current, with no tape, wire, or cardboard repairs in use.",
+    "Electrical panels and covers are intact with no exposed wiring; overhead lights are in good repair and properly shielded.",
+    "Employees are following good hand washing procedures.",
+    "Employees are not wearing jewelry or nail polish and all items are below the waist.",
+    "No evidence of employees chewing gum or eating out on the lines.",
+    "No personal items (phones, keys, wallets) in GMP areas",
+    "Employees are wearing hairnets and beardnets properly. Wound(s) are covered with bandaged protected with rubber gloves.",
   ]],
 ];

@@ -6,6 +6,7 @@
 const GMP_SECTIONS = require("./sections-data");
 const INTERNAL_SECTIONS = require("./internal-sections-data");
 const GLASS_SECTIONS = require("./glass-sections-data");
+const SAFETY_WALK_SECTIONS = require("./safety-walk-sections-data");
 
 const AUDIT_TYPES = {
   gmp: {
@@ -75,6 +76,27 @@ const AUDIT_TYPES = {
       title: "Glass & Brittle Audit Console",
       subtitle: "Filter to the zone that’s due, then mark any item “U” (Unsatisfactory) to open it on the log.",
       revision_date: "2025 (Rev 2)",
+    },
+  },
+  safety: {
+    key: "safety",
+    label: "Daily Safety Walk",
+    docNumber: "",
+    sectionLabel: "Zone",
+    sections: SAFETY_WALK_SECTIONS, // [[zone, [itemText, ...]], ...]
+    hasZoneField: false,
+    hasCapaStatus: true,
+    hasShift: true,
+    hasNotify: true,
+    statusOptions: ["S", "U", "N"],
+    statusLabels: { S: "Safe", U: "Hazard", N: "N/A" },
+    naStatus: "N",
+    capaStatusOptions: ["Open", "In Progress", "Closed"],
+    defaults: {
+      eyebrow: "Daily Safety Walk · Per-Shift Hazard Check · Shared Live Record",
+      title: "Daily Safety Walk",
+      subtitle: "A worker-safety-focused walk each shift, organized by area. Mark a hazard “Hazard” to open it on the log and notify the zone contact right away.",
+      revision_date: "09/2026",
     },
   },
 };

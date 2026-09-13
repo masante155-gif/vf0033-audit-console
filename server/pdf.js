@@ -761,7 +761,11 @@ function generatePdf(res, { settings, items, history, archiveInfo, auditType }) 
   doc.y += 12;
   doc.font("Times-Bold").fontSize(13).fillColor(C.ink).text(signoffHeading);
   doc.font("Helvetica").fontSize(10).fillColor(C.inkMuted);
-  doc.text("QA Lead / Tech Initials: " + (settings.qa_initials || "—"));
+  // Daily Safety Walk dropped this field from its Sign-Off card — leave it
+  // out of its PDF too rather than printing a permanent "—".
+  if (type.key !== "safety") {
+    doc.text("QA Lead / Tech Initials: " + (settings.qa_initials || "—"));
+  }
   doc.text(reviewedByLabel + ": " + (settings.reviewed_by || "—"));
   doc.text("Date: " + (settings.reviewed_date || "—"));
 

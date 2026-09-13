@@ -7,7 +7,14 @@ const sharp = require("sharp");
 const { db, bumpRevision, DATA_DIR } = require("./db");
 const { generatePdf } = require("./pdf");
 const { AUDIT_TYPES, NEW_AUDIT_TYPE_KEYS } = require("./audit-types");
-const { isAiConfigured, rephraseField, draftFromKeywords, AiNotConfiguredError, AiUpstreamError } = require("./ai");
+const {
+  isAiConfigured,
+  rephraseField,
+  draftFromKeywords,
+  analyzePhotoForNonConformance,
+  AiNotConfiguredError,
+  AiUpstreamError,
+} = require("./ai");
 
 function handleAiError(res, e) {
   if (e instanceof AiNotConfiguredError) return res.status(503).json({ error: e.message });
@@ -460,6 +467,246 @@ app.post("/api/items/:id/ai/draft", async (req, res) => {
   }
 });
 
+// ---- Mentra glasses AI spot-check (prototype) -----------------------------
+// The on-phone miniapp POSTs the glasses' photo (a short-TTL signed URL from
+// Mentra, not a file we control) plus whatever the auditor said when they
+// triggered the check. This endpoint downloads that photo once (so it
+// survives after the signed URL expires), asks Claude for a one-line read,
+// logs both to mentra_flags, and hands the read back so the glasses can
+// speak it immediately. See db.js's mentra_flags comment for why this is
+// its own log instead of writing straight into a checklist item's NC.
+app.post("/api/mentra/flag", async (req, res) => {
+  const photoUrl = String((req.body || {}).photoUrl || "").trim();
+  const transcript = String((req.body || {}).transcript || "").trim();
+  if (!photoUrl) return res.status(400).json({ error: "Missing photoUrl." });
+
+  let photoRes;
+  try {
+    photoRes = await fetch(photoUrl);
+  } catch (e) {
+    return res.status(502).json({ error: "Couldn't download the photo from the glasses." });
+  }
+  if (!photoRes.ok) {
+    return res.status(502).json({ error: "Couldn't download the photo from the glasses (" + photoRes.status + ")." });
+  }
+  const rawBuffer = Buffer.from(await photoRes.arrayBuffer());
+
+  let filename;
+  try {
+    filename = "mentra-" + crypto.randomUUID() + ".jpg";
+    const outPath = path.join(DATA_DIR, "uploads", filename);
+    await sharp(rawBuffer).rotate().resize({ width: 1100, withoutEnlargement: true }).jpeg({ quality: 76 }).toFile(outPath);
+  } catch (e) {
+    return res.status(500).json({ error: "Could not process the photo: " + e.message });
+  }
+
+  try {
+    const jpegBuffer = fs.readFileSync(path.join(DATA_DIR, "uploads", filename));
+    const { flagged, summary } = await analyzePhotoForNonConformance({
+      photoBase64: jpegBuffer.toString("base64"),
+      mediaType: "image/jpeg",
+      transcript,
+    });
+    db.prepare(
+      "INSERT INTO mentra_flags (transcript, photo_filename, flagged, summary) VALUES (?, ?, ?, ?)"
+    ).run(transcript, filename, flagged ? 1 : 0, summary);
+    res.json({ ok: true, flagged, summary, photo: filename });
+  } catch (e) {
+    if (e instanceof AiNotConfiguredError) return res.status(503).json({ error: e.message });
+    if (e instanceof AiUpstreamError) return res.status(502).json({ error: e.message });
+    console.error("Mentra flag error:", e);
+    res.status(500).json({ error: "Something went wrong analyzing that photo." });
+  }
+});
+
+app.get("/api/mentra/flags", (req, res) => {
+  const rows = db.prepare("SELECT * FROM mentra_flags ORDER BY id DESC LIMIT 100").all();
+  res.json({
+    flags: rows.map((r) => ({
+      id: r.id,
+      transcript: r.transcript,
+      flagged: !!r.flagged,
+      summary: r.summary,
+      photoUrl: "/uploads/" + r.photo_filename,
+      createdAt: r.created_at,
+    })),
+  });
+});
+
+// ---- Safety & Food Culture Training --------------------------------------
+// A weekly rotating knowledge-check, its own standalone branch and tab
+// (separate from the Daily Safety Walk itself, which just requires an
+// answer before the walk continues). One mixed pool of OSHA-safety and
+// food-safety-culture/HACCP questions — see training-questions-data.js for
+// the seed bank. "This week's" question is picked deterministically (a
+// whole-weeks-since-epoch index modulo the active question count) rather
+// than stored anywhere, so every device/shift sees the same question
+// without needing a shared "current question" row to keep in sync.
+// Answers are logged once per submission (not deduplicated per person/
+// week), since the ask was "one question per walk, answer required to
+// proceed" — multiple walks, and multiple people, can each answer the same
+// week's question.
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+function globalWeekIndex(date) {
+  return Math.floor(date.getTime() / WEEK_MS);
+}
+function getActiveTrainingQuestions() {
+  return db.prepare("SELECT * FROM training_questions WHERE active = 1 ORDER BY sort_order ASC, id ASC").all();
+}
+function getCurrentTrainingQuestion() {
+  const active = getActiveTrainingQuestions();
+  if (!active.length) return null;
+  const idx = globalWeekIndex(new Date()) % active.length;
+  return active[idx];
+}
+function publicTrainingQuestion(q) {
+  return {
+    id: q.id,
+    category: q.category,
+    prompt: q.prompt,
+    options: { A: q.option_a, B: q.option_b, C: q.option_c },
+  };
+}
+function fullTrainingQuestion(q) {
+  return {
+    id: q.id,
+    category: q.category,
+    prompt: q.prompt,
+    options: { A: q.option_a, B: q.option_b, C: q.option_c },
+    correct: q.correct_option,
+    explanation: q.explanation,
+    active: !!q.active,
+    sortOrder: q.sort_order,
+  };
+}
+
+app.get("/api/training/current", (req, res) => {
+  const q = getCurrentTrainingQuestion();
+  if (!q) return res.json({ question: null });
+  res.json({ question: publicTrainingQuestion(q), weekKey: String(globalWeekIndex(new Date())) });
+});
+
+app.post("/api/training/answer", (req, res) => {
+  const body = req.body || {};
+  const questionId = Number(body.questionId);
+  const selected = String(body.selected || "").trim().toUpperCase();
+  if (!["A", "B", "C"].includes(selected)) {
+    return res.status(400).json({ error: "selected must be A, B, or C." });
+  }
+  const q = db.prepare("SELECT * FROM training_questions WHERE id = ?").get(questionId);
+  if (!q) return res.status(404).json({ error: "Unknown question." });
+  const current = getCurrentTrainingQuestion();
+  if (!current || current.id !== q.id) {
+    return res.status(409).json({ error: "That question has rotated out — refresh and try this week's question." });
+  }
+  const isCorrect = selected === q.correct_option;
+  const weekKey = String(globalWeekIndex(new Date()));
+  const shift = body.shift ? Number(body.shift) : null;
+  const initials = String(body.initials || "").trim();
+  db.prepare(
+    `INSERT INTO training_responses (question_id, week_key, shift, initials, selected_option, is_correct, question_prompt)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(q.id, weekKey, shift, initials, selected, isCorrect ? 1 : 0, q.prompt);
+  // The only current consumer of this gate is the Daily Safety Walk (its
+  // Sign-Off card blocks until this week's question is answered) — record
+  // the week key there so /api/safety/state reflects it for every viewer.
+  // bumpRevision() so the walk's poll loop unlocks sign-off within a few
+  // seconds even for people who didn't submit this particular answer.
+  db.prepare("UPDATE audit_type_settings SET training_week_key = ? WHERE audit_type = 'safety'").run(weekKey);
+  bumpRevision();
+  res.json({ ok: true, correct: isCorrect, correctOption: q.correct_option, explanation: q.explanation });
+});
+
+app.get("/api/training/questions", requireAdmin, (req, res) => {
+  const rows = db.prepare("SELECT * FROM training_questions ORDER BY sort_order ASC, id ASC").all();
+  res.json({ questions: rows.map(fullTrainingQuestion) });
+});
+
+app.post("/api/training/questions", requireAdmin, (req, res) => {
+  const body = req.body || {};
+  const category = String(body.category || "").trim();
+  const prompt = String(body.prompt || "").trim();
+  const options = body.options || {};
+  const optionA = String(options.A || "").trim();
+  const optionB = String(options.B || "").trim();
+  const optionC = String(options.C || "").trim();
+  const correct = String(body.correct || "").trim().toUpperCase();
+  const explanation = String(body.explanation || "").trim();
+  if (!prompt || !optionA || !optionB || !optionC) {
+    return res.status(400).json({ error: "Prompt and all three options are required." });
+  }
+  if (!["A", "B", "C"].includes(correct)) {
+    return res.status(400).json({ error: "correct must be A, B, or C." });
+  }
+  const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), 0) AS m FROM training_questions").get().m;
+  const info = db
+    .prepare(
+      `INSERT INTO training_questions
+         (category, prompt, option_a, option_b, option_c, correct_option, explanation, sort_order, active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
+    )
+    .run(category, prompt, optionA, optionB, optionC, correct, explanation, maxOrder + 1);
+  bumpRevision();
+  const created = db.prepare("SELECT * FROM training_questions WHERE id = ?").get(info.lastInsertRowid);
+  res.json({ ok: true, question: fullTrainingQuestion(created) });
+});
+
+app.patch("/api/training/questions/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare("SELECT * FROM training_questions WHERE id = ?").get(id);
+  if (!existing) return res.status(404).json({ error: "Question not found." });
+  const body = req.body || {};
+  const options = body.options || {};
+  const category = body.category !== undefined ? String(body.category).trim() : existing.category;
+  const prompt = body.prompt !== undefined ? String(body.prompt).trim() : existing.prompt;
+  const optionA = options.A !== undefined ? String(options.A).trim() : existing.option_a;
+  const optionB = options.B !== undefined ? String(options.B).trim() : existing.option_b;
+  const optionC = options.C !== undefined ? String(options.C).trim() : existing.option_c;
+  const correct = body.correct !== undefined ? String(body.correct).trim().toUpperCase() : existing.correct_option;
+  const explanation = body.explanation !== undefined ? String(body.explanation).trim() : existing.explanation;
+  const active = body.active !== undefined ? (body.active ? 1 : 0) : existing.active;
+  if (!prompt || !optionA || !optionB || !optionC) {
+    return res.status(400).json({ error: "Prompt and all three options are required." });
+  }
+  if (!["A", "B", "C"].includes(correct)) {
+    return res.status(400).json({ error: "correct must be A, B, or C." });
+  }
+  db.prepare(
+    `UPDATE training_questions
+     SET category = ?, prompt = ?, option_a = ?, option_b = ?, option_c = ?, correct_option = ?, explanation = ?, active = ?
+     WHERE id = ?`
+  ).run(category, prompt, optionA, optionB, optionC, correct, explanation, active, id);
+  bumpRevision();
+  const updated = db.prepare("SELECT * FROM training_questions WHERE id = ?").get(id);
+  res.json({ ok: true, question: fullTrainingQuestion(updated) });
+});
+
+app.delete("/api/training/questions/:id", requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare("SELECT * FROM training_questions WHERE id = ?").get(id);
+  if (!existing) return res.status(404).json({ error: "Question not found." });
+  db.prepare("DELETE FROM training_questions WHERE id = ?").run(id);
+  bumpRevision();
+  res.json({ ok: true, deleted: id });
+});
+
+app.get("/api/training/history", requireAdmin, (req, res) => {
+  const rows = db.prepare("SELECT * FROM training_responses ORDER BY id DESC LIMIT 200").all();
+  res.json({
+    responses: rows.map((r) => ({
+      id: r.id,
+      questionId: r.question_id,
+      prompt: r.question_prompt,
+      weekKey: r.week_key,
+      shift: r.shift,
+      initials: r.initials,
+      selected: r.selected_option,
+      correct: !!r.is_correct,
+      createdAt: r.created_at,
+    })),
+  });
+});
+
 function shiftName(settings, slot) {
   if (!slot) return null;
   return settings["shift" + slot + "_name"] || ("Shift " + slot);
@@ -884,6 +1131,8 @@ function typeMeta(type) {
     sectionLabel: type.sectionLabel,
     hasZoneField: type.hasZoneField,
     hasCapaStatus: type.hasCapaStatus,
+    hasShift: !!type.hasShift,
+    hasNotify: !!type.hasNotify,
     statusOptions: type.statusOptions,
     statusLabels: type.statusLabels,
     naStatus: type.naStatus,
@@ -963,8 +1212,27 @@ app.get("/api/:type/state", requireNewType, (req, res) => {
   res.json({
     settings: getTypeSettings(typeKey),
     items: getTypeItems(typeKey),
+    departments: getDepartments(),
     gateOpen: typeGateOpen(typeKey),
     auditType: typeMeta(req.auditType),
+  });
+});
+
+// Account-wide fields (shift names/emails, EmailJS keys) needed by any
+// audit type that has notifications or shift tracking enabled. These live
+// solely in the GMP-era `settings` table but apply across every audit type
+// (see the departments/notify comment above) — this is the generic-type
+// equivalent of what GMP already gets for free via its own /api/state.
+app.get("/api/account-settings", (req, res) => {
+  const s = getSettings();
+  res.json({
+    shift1_name: s.shift1_name, shift1_email: s.shift1_email, shift1_lead_email: s.shift1_lead_email,
+    shift2_name: s.shift2_name, shift2_email: s.shift2_email, shift2_lead_email: s.shift2_lead_email,
+    shift3_name: s.shift3_name, shift3_email: s.shift3_email, shift3_lead_email: s.shift3_lead_email,
+    shift4_name: s.shift4_name, shift4_email: s.shift4_email, shift4_lead_email: s.shift4_lead_email,
+    emailjs_service_id: s.emailjs_service_id,
+    emailjs_template_id: s.emailjs_template_id,
+    emailjs_public_key: s.emailjs_public_key,
   });
 });
 
@@ -1061,6 +1329,10 @@ app.post("/api/:type/items/:id/nc", requireNewType, (req, res) => {
     if (key === "capa_status" && !req.auditType.hasCapaStatus) continue;
     if (key in body) updates[key] = String(body[key]);
   }
+  if (req.auditType.hasShift && "shift" in body) {
+    const s = body.shift;
+    updates.shift = s === null || s === "" ? null : Number(s);
+  }
   const keys = Object.keys(updates);
   if (keys.length === 0) return res.status(400).json({ error: "No recognized fields." });
   const setClause = keys.map((k) => k + " = ?").join(", ");
@@ -1122,10 +1394,83 @@ app.post("/api/:type/items/:id/clear", requireNewType, (req, res) => {
   deleteItemPhotoFiles(getItemPhotos(id));
   db.prepare("DELETE FROM item_photos WHERE item_id = ?").run(id);
   db.prepare(
-    "UPDATE items SET description='', corrective_action='', preventive_measures='', initials='', capa_status='', photo_filename=NULL WHERE id = ?"
+    "UPDATE items SET description='', corrective_action='', preventive_measures='', initials='', capa_status='', shift=NULL, photo_filename=NULL, notified_at=NULL WHERE id = ?"
   ).run(id);
   bumpRevision();
   res.json({ ok: true, item: Object.assign(db.prepare("SELECT * FROM items WHERE id = ?").get(id), { photos: [] }) });
+});
+
+// Generic notify-payload/notify routes, mirroring the GMP-specific ones
+// above but scoped to whichever :type has hasNotify enabled (currently just
+// the Daily Safety Walk). The browser still sends the actual email via
+// EmailJS using the same account-wide keys GMP uses — this endpoint just
+// validates the item and hands back everything the EmailJS template needs.
+app.get("/api/:type/items/:id/notify-payload", requireNewType, (req, res) => {
+  if (!req.auditType.hasNotify) return res.status(404).json({ error: "Notifications aren't enabled for this audit." });
+  const typeKey = req.params.type;
+  const id = Number(req.params.id);
+  const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = ?").get(id, typeKey);
+  if (!item) return res.status(404).json({ error: "Item not found." });
+  if (item.status !== "U") {
+    return res.status(400).json({ error: "This item isn't marked " + ((req.auditType.statusLabels || {}).U || "Unacceptable") + "." });
+  }
+
+  const settings = getSettings(); // account-wide: shift contacts + EmailJS keys
+  const dept = getDepartment(item.section);
+  const shift = shiftName(settings, item.shift);
+
+  const recipients = [];
+  if (dept && dept.head_email && dept.head_email.trim()) {
+    recipients.push({ email: dept.head_email.trim(), label: "Department Head" });
+  }
+  if (dept && dept.is_production_line) {
+    if (!item.shift) {
+      return res.status(400).json({ error: "Pick a shift for this deviation first — this is a production line department." });
+    }
+    const supEmail = settings["shift" + item.shift + "_email"];
+    const leadEmail = settings["shift" + item.shift + "_lead_email"];
+    if (supEmail && supEmail.trim()) recipients.push({ email: supEmail.trim(), label: shift + " Supervisor" });
+    if (leadEmail && leadEmail.trim()) recipients.push({ email: leadEmail.trim(), label: shift + " Lead" });
+  }
+  if (recipients.length === 0) {
+    return res.status(400).json({
+      error: "No recipients configured for this zone — set a department head (and shift contacts if this is production line) in Admin.",
+    });
+  }
+
+  const typeSettings = getTypeSettings(typeKey);
+  const link = baseUrl(req) + "/";
+  const subject = req.auditType.label + " — Item #" + id + " needs review";
+  const message =
+    "A " + ((req.auditType.statusLabels || {}).U || "hazard") + " was logged on the " + req.auditType.label + ".\n\n" +
+    "Item #" + id + " — " + item.section + "\n" +
+    (shift ? "Shift: " + shift + "\n" : "") +
+    "Date: " + (typeSettings.audit_date || "(unspecified)") + "\n" +
+    "Logged by: " + (typeSettings.auditor || "(unspecified)") + "\n\n" +
+    "Description: " + (item.description || item.text) + "\n" +
+    "Corrective action taken: " + (item.corrective_action || "(not yet entered)") + "\n" +
+    "Preventive measures: " + (item.preventive_measures || "(not yet entered)") + "\n\n" +
+    "Please open the " + req.auditType.label + " tab, review this item, and enter your initials to acknowledge it.\n\n" +
+    link;
+
+  const to = recipients.map((r) => r.email).join(",");
+  const recipientSummary = recipients.map((r) => r.label).join(", ");
+
+  res.json({ ok: true, to, recipientSummary, subject, message, link, shift, itemId: id });
+});
+
+app.post("/api/:type/items/:id/notify", requireNewType, (req, res) => {
+  if (!req.auditType.hasNotify) return res.status(404).json({ error: "Notifications aren't enabled for this audit." });
+  const typeKey = req.params.type;
+  const id = Number(req.params.id);
+  const item = db.prepare("SELECT * FROM items WHERE id = ? AND audit_type = ?").get(id, typeKey);
+  if (!item) return res.status(404).json({ error: "Item not found." });
+
+  const sentTo = req.body && req.body.sentTo ? String(req.body.sentTo) : null;
+  const now = new Date().toISOString();
+  db.prepare("UPDATE items SET notified_at = ? WHERE id = ?").run(now, id);
+  bumpRevision();
+  res.json({ ok: true, item: db.prepare("SELECT * FROM items WHERE id = ?").get(id), sentTo });
 });
 
 // ---- Admin: full checklist editing (item wording, add/delete items and
@@ -1253,7 +1598,11 @@ app.post("/api/:type/reset", requireNewType, (req, res) => {
     "UPDATE items SET status='', description='', corrective_action='', preventive_measures='', initials='', capa_status='', photo_filename=NULL WHERE audit_type = ?"
   ).run(typeKey);
   db.prepare(
-    "UPDATE audit_type_settings SET auditor='', audit_date='', qa_initials='', reviewed_by='', reviewed_date='', signoff_confirmed_at='' WHERE audit_type = ?"
+    // training_week_key reset here too (harmless for types that don't use
+    // it) so a fresh Daily Safety Walk always requires answering this
+    // week's training question again, even if an earlier walk this week
+    // already answered it — "one question per walk," not per week.
+    "UPDATE audit_type_settings SET auditor='', audit_date='', qa_initials='', reviewed_by='', reviewed_date='', signoff_confirmed_at='', training_week_key='' WHERE audit_type = ?"
   ).run(typeKey);
   bumpRevision();
   res.json({ ok: true, archived: snapshotId !== null });

@@ -124,10 +124,95 @@ async function draftFromKeywords({ auditLabel, sectionLabel, itemText, keywords 
   };
 }
 
+// Look at one photo (from the Mentra glasses on-demand spot-check) and give
+// a short, spoken-friendly read on whether it shows a food-safety, GMP, or
+// worker-safety non-conformance. Separate from callClaude() because this is
+// the one call that needs an image content block instead of plain text.
+async function analyzePhotoForNonConformance({ photoBase64, mediaType, transcript }) {
+  if (!isAiConfigured()) {
+    throw new AiNotConfiguredError(
+      "The AI spot-check assistant isn't set up yet. Ask your admin to add an Anthropic API key in Railway."
+    );
+  }
+  const system =
+    "You are helping a floor auditor at a PET water-bottling plant (production lines, injection/regrind, " +
+    "water processing, warehouse, QA/chemical storage, maintenance) do an on-demand AI spot-check while " +
+    "wearing camera glasses. You're given one photo of whatever they were looking at when they asked for a " +
+    "check, plus what they said (which may just be the trigger phrase, or may describe what they're worried " +
+    "about). Decide if the photo shows a clear food-safety, GMP, or worker-safety non-conformance: things " +
+    "like a spill or standing liquid, a blocked exit or fire equipment, a missing machine guard, exposed " +
+    "wiring, an unlabeled or leaking chemical container, a tripping hazard, PPE not being worn where it's " +
+    "clearly required, or damaged equipment. If the photo is unclear, too dark, or doesn't show enough to " +
+    "judge, say so rather than guessing. Never invent detail you can't actually see in the photo. Respond " +
+    "with ONLY a JSON object with exactly these keys: flagged (boolean) and summary (a single short spoken " +
+    "sentence, under 25 words, plain natural language, no markdown, safe to read aloud through a speaker). " +
+    "No markdown code fences, no other text.";
+  const userText =
+    "The auditor said: \"" + (transcript || "").trim() + "\"" +
+    "\nLook at the attached photo and give your read.";
+
+  let res;
+  try {
+    res = await fetch(ANTHROPIC_API_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        system,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: mediaType, data: photoBase64 } },
+              { type: "text", text: userText },
+            ],
+          },
+        ],
+      }),
+    });
+  } catch (e) {
+    throw new AiUpstreamError("Couldn't reach the AI service right now. Try again in a moment.");
+  }
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const body = await res.json();
+      detail = (body && body.error && body.error.message) || "";
+    } catch (e) {
+      // ignore — fall through with no detail
+    }
+    throw new AiUpstreamError(
+      "The AI service returned an error" + (detail ? ": " + detail + "." : ".") + " Try again in a moment."
+    );
+  }
+  const data = await res.json();
+  const block = (data.content || []).find((c) => c.type === "text");
+  if (!block || !block.text || !block.text.trim()) {
+    throw new AiUpstreamError("The AI service returned an empty response. Try again.");
+  }
+  let parsed;
+  try {
+    const jsonMatch = block.text.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : block.text);
+  } catch (e) {
+    throw new AiUpstreamError("The AI response couldn't be read. Try again.");
+  }
+  return {
+    flagged: !!parsed.flagged,
+    summary: String(parsed.summary || "").trim() || "Checked — nothing specific to report.",
+  };
+}
+
 module.exports = {
   isAiConfigured,
   rephraseField,
   draftFromKeywords,
+  analyzePhotoForNonConformance,
   AiNotConfiguredError,
   AiUpstreamError,
 };
